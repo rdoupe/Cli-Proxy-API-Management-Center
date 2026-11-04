@@ -6,6 +6,7 @@ import type { TrafficWindow } from '@/features/dashboard/types';
 import type { AuthFileItem } from '@/types/authFile';
 import type { PoolAccount, PoolOverview } from '@/types/pool';
 import { getErrorMessage } from '@/utils/helpers';
+import { attachCredentialHandles } from '../credentialHandles';
 import { accountsFromCredentials, isPoolEndpointMissing, normalizePoolOverview } from '../logic';
 
 export type PoolOverviewStatus = 'idle' | 'loading' | 'ready' | 'error';
@@ -24,26 +25,6 @@ export interface PoolOverviewState {
 }
 
 export type PoolAccountAction = 'pause' | 'resume' | 'check' | 'clear_limit';
-
-/** Pool accounts gain a file handle when a credential matches by name, index or label. */
-const attachCredentialHandles = (accounts: PoolAccount[], files: AuthFileItem[]): PoolAccount[] =>
-  accounts.map((account) => {
-    if (account.fileName) return account;
-    const match = files.find((file) => {
-      if (file.runtimeOnly === true || file.runtimeOnly === 'true') return false;
-      const name = String(file.name ?? '');
-      const index = file.authIndex === null || file.authIndex === undefined ? '' : String(file.authIndex);
-      // The pool id is the credential's auth index; names and e-mails are fallbacks.
-      return (
-        (index && (index === account.id || index === account.authIndex)) ||
-        (name && (name === account.id || name === account.fileName)) ||
-        (account.label && file.email === account.label)
-      );
-    });
-    if (!match) return account;
-    const authIndex = match.authIndex === null || match.authIndex === undefined ? null : String(match.authIndex);
-    return { ...account, fileName: String(match.name ?? '') || null, authIndex: authIndex ?? account.authIndex };
-  });
 
 export function usePoolOverview(): PoolOverviewState {
   const connectionStatus = useAuthStore((state) => state.connectionStatus);
@@ -151,16 +132,27 @@ export function usePoolOverview(): PoolOverviewState {
         else if (account.authIndex) await authFilesApi.resetCooldown(account.authIndex);
       } else if (!account.fileName) {
         return;
-      } else if (action === 'pause') await authFilesApi.setStatus(account.fileName, true, authIndex);
-      else if (action === 'resume') await authFilesApi.setStatus(account.fileName, false, authIndex);
-      else if (action === 'check') await authFilesApi.requestManualRefresh(account.fileName, authIndex);
+      } else if (action === 'pause')
+        await authFilesApi.setStatus(account.fileName, true, authIndex);
+      else if (action === 'resume')
+        await authFilesApi.setStatus(account.fileName, false, authIndex);
+      else if (action === 'check')
+        await authFilesApi.requestManualRefresh(account.fileName, authIndex);
       await load();
     },
     [load]
   );
 
   return useMemo(
-    () => ({ status, overview, unsupported, error, recentTraffic: dashboard.traffic, refresh, act }),
+    () => ({
+      status,
+      overview,
+      unsupported,
+      error,
+      recentTraffic: dashboard.traffic,
+      refresh,
+      act,
+    }),
     [status, overview, unsupported, error, dashboard.traffic, refresh, act]
   );
 }

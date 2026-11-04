@@ -50,6 +50,7 @@ import { PolicyPanel } from './components/PolicyPanel';
 import { RoutingSaveBar } from './components/RoutingSaveBar';
 import { usePageTransitionLayer } from '@/components/common/PageTransitionLayer';
 import { TierLadder } from './components/TierLadder';
+import { RoutingPoolSection } from '@/features/pool/components/RoutingPoolSection';
 import { WeightDialog } from './components/WeightDialog';
 import styles from './RoutingPage.module.scss';
 
@@ -386,6 +387,8 @@ export function RoutingPage() {
           {t('routing.title')}
         </h1>
       </header>
+
+      <RoutingPoolSection settings={draft?.settings ?? null} />
 
       {renderBody()}
 

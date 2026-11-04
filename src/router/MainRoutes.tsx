@@ -1,5 +1,7 @@
 import { Navigate, useRoutes, type Location } from 'react-router-dom';
-import { DashboardPage } from '@/features/dashboard/DashboardPage';
+import { OverviewPage } from '@/features/pool/OverviewPage';
+import { AccountsPage } from '@/features/pool/AccountsPage';
+import { UsagePage } from '@/features/pool/UsagePage';
 import { ProvidersWorkbenchPage } from '@/features/providers/ProvidersWorkbenchPage';
 import { AuthFilesPage } from '@/features/authFiles/AuthFilesPage';
 import { AuthFilesOAuthExcludedEditPage } from '@/pages/AuthFilesOAuthExcludedEditPage';
@@ -16,8 +18,11 @@ import { SystemPage } from '@/pages/SystemPage';
 import { useAuthStore } from '@/stores';
 
 const createMainRoutes = (supportsPlugin: boolean) => [
-  { path: '/', element: <DashboardPage /> },
-  { path: '/dashboard', element: <DashboardPage /> },
+  { path: '/', element: <OverviewPage /> },
+  { path: '/overview', element: <Navigate to="/" replace /> },
+  { path: '/dashboard', element: <Navigate to="/" replace /> },
+  { path: '/accounts', element: <AccountsPage /> },
+  { path: '/usage', element: <UsagePage /> },
   { path: '/settings', element: <Navigate to="/config" replace /> },
   { path: '/api-keys', element: <Navigate to="/config" replace /> },
   { path: '/quick-start', element: <ProvidersWorkbenchPage fixedBrand="apikeyFun" /> },

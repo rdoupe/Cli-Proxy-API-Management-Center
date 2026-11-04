@@ -598,22 +598,50 @@ export function MainLayout() {
 
   const navGroups: SidebarNavGroup[] = [
     {
-      id: 'operate',
-      labelKey: 'nav_groups.operate',
+      id: 'pool',
+      labelKey: 'nav_groups.pool',
       items: [
         {
           path: '/',
-          labelKey: 'nav.dashboard',
-          metaKey: 'nav_meta.dashboard',
+          labelKey: 'nav.overview',
+          metaKey: 'nav_meta.overview',
           icon: sidebarIcons.dashboard,
         },
-        ...(!isApiKeyFunConfigured ? [quickStartNavItem] : []),
+        {
+          path: '/accounts',
+          labelKey: 'nav.accounts',
+          metaKey: 'nav_meta.accounts',
+          badge: authFilesCount ?? undefined,
+          badgeLabel:
+            typeof authFilesCount === 'number'
+              ? t('sidebar.auth_files_count', { count: authFilesCount })
+              : undefined,
+          icon: sidebarIcons.authFiles,
+        },
+        {
+          path: '/usage',
+          labelKey: 'nav.usage',
+          metaKey: 'nav_meta.usage',
+          icon: sidebarIcons.quota,
+        },
+        {
+          path: '/routing',
+          labelKey: 'nav.routing',
+          metaKey: 'nav_meta.routing',
+          icon: sidebarIcons.routing,
+        },
       ],
     },
     {
-      id: 'gateway',
-      labelKey: 'nav_groups.gateway',
+      id: 'setup',
+      labelKey: 'nav_groups.setup',
       items: [
+        {
+          path: '/oauth',
+          labelKey: 'nav.oauth',
+          metaKey: 'nav_meta.oauth',
+          icon: sidebarIcons.oauth,
+        },
         {
           path: '/ai-providers',
           labelKey: 'nav.ai_providers',
@@ -624,50 +652,9 @@ export function MainLayout() {
           path: '/auth-files',
           labelKey: 'nav.auth_files',
           metaKey: 'nav_meta.auth_files',
-          badge: authFilesCount ?? undefined,
-          badgeLabel:
-            typeof authFilesCount === 'number'
-              ? t('sidebar.auth_files_count', { count: authFilesCount })
-              : undefined,
           icon: sidebarIcons.authFiles,
         },
-        {
-          path: '/oauth',
-          labelKey: 'nav.oauth',
-          metaKey: 'nav_meta.oauth',
-          icon: sidebarIcons.oauth,
-        },
-        {
-          path: '/routing',
-          labelKey: 'nav.routing',
-          metaKey: 'nav_meta.routing',
-          icon: sidebarIcons.routing,
-        },
-        ...(isApiKeyFunConfigured ? [quickStartNavItem] : []),
-      ],
-    },
-    {
-      id: 'observe',
-      labelKey: 'nav_groups.observe',
-      items: [
-        {
-          path: '/quota',
-          labelKey: 'nav.quota_management',
-          metaKey: 'nav_meta.quota_management',
-          icon: sidebarIcons.quota,
-        },
-        {
-          path: '/logs',
-          labelKey: 'nav.logs',
-          metaKey: 'nav_meta.logs',
-          icon: sidebarIcons.logs,
-        },
-      ],
-    },
-    {
-      id: 'control',
-      labelKey: 'nav_groups.control',
-      items: [
+        quickStartNavItem,
         {
           path: '/config',
           labelKey: 'nav.config_management',
@@ -690,6 +677,24 @@ export function MainLayout() {
               },
             ]
           : []),
+      ],
+    },
+    {
+      id: 'diagnostics',
+      labelKey: 'nav_groups.diagnostics',
+      items: [
+        {
+          path: '/quota',
+          labelKey: 'nav.quota_management',
+          metaKey: 'nav_meta.quota_management',
+          icon: sidebarIcons.quota,
+        },
+        {
+          path: '/logs',
+          labelKey: 'nav.logs',
+          metaKey: 'nav_meta.logs',
+          icon: sidebarIcons.logs,
+        },
         {
           path: '/system',
           labelKey: 'nav.system_info',

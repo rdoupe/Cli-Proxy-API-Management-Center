@@ -73,6 +73,7 @@ export function ExplainRoute() {
               </li>
             ))}
           </ul>
+          {result.note ? <p className={styles.sectionNote}>{result.note}</p> : null}
         </>
       ) : null}
     </div>

@@ -8,15 +8,21 @@ import type { PoolAccount, PoolOverview } from '@/types/pool';
 import { getErrorMessage } from '@/utils/helpers';
 import { attachCredentialHandles } from '../credentialHandles';
 import { accountsFromCredentials, isPoolEndpointMissing, normalizePoolOverview } from '../logic';
+import {
+  INITIAL_POOL_LOAD,
+  finishPoolLoad,
+  poolPageView,
+  startPoolLoad,
+  type PoolLoadOutcome,
+  type PoolLoadState,
+  type PoolPageView,
+} from './poolLoadState';
 
-export type PoolOverviewStatus = 'idle' | 'loading' | 'ready' | 'error';
+export type { PoolOverviewStatus } from './poolLoadState';
 
-export interface PoolOverviewState {
-  status: PoolOverviewStatus;
-  overview: PoolOverview | null;
-  /** True when this backend has no `/pool/*` endpoints; `overview` is then credential-derived. */
-  unsupported: boolean;
-  error: string | null;
+export interface PoolOverviewState extends PoolLoadState {
+  /** Derived presentation flags shared by every pool page. */
+  view: PoolPageView;
   /** Recent request window from credential counters; the only traffic older backends report. */
   recentTraffic: TrafficWindow;
   refresh: () => Promise<void>;
@@ -26,94 +32,90 @@ export interface PoolOverviewState {
 
 export type PoolAccountAction = 'pause' | 'resume' | 'check' | 'clear_limit';
 
+const credentialsOverview = (files: AuthFileItem[], observedAt: string | null): PoolOverview => ({
+  schemaVersion: 0,
+  observedAt: observedAt ?? new Date().toISOString(),
+  accounts: accountsFromCredentials(files, Date.now()),
+  policy: null,
+  stats: {
+    available: false,
+    reason: 'unsupported',
+    from: null,
+    to: null,
+    requests: 0,
+    successes: 0,
+    failures: 0,
+    failovers: 0,
+    inputTokens: null,
+    outputTokens: null,
+    averageLatencyMs: null,
+    persistence: null,
+  },
+  persistence: null,
+  homeMode: false,
+  source: 'credentials',
+});
+
+/**
+ * One load: the pool endpoint, with credential handles attached; on a backend without it,
+ * the same model from the credentials list. Any other failure is reported as such, never as
+ * an empty pool or an older backend.
+ */
+async function loadOutcome(): Promise<PoolLoadOutcome> {
+  let files: AuthFileItem[] = [];
+  let observedAt: string | null = null;
+  let filesError: unknown = null;
+  try {
+    const response = await authFilesApi.list();
+    files = response.files;
+    observedAt = response.observedAt ?? null;
+  } catch (error) {
+    // The pool endpoint can still answer; credentials only add action handles here.
+    filesError = error;
+  }
+
+  try {
+    const payload = await poolApi.getOverview();
+    const normalized = normalizePoolOverview(payload);
+    return {
+      kind: 'pool',
+      overview: { ...normalized, accounts: attachCredentialHandles(normalized.accounts, files) },
+    };
+  } catch (poolError) {
+    if (!isPoolEndpointMissing(poolError)) {
+      return { kind: 'error', message: getErrorMessage(poolError, 'Request failed') };
+    }
+  }
+
+  // Older backend: the credentials list is the only source, so its failure is the failure.
+  if (filesError) {
+    return { kind: 'error', message: getErrorMessage(filesError, 'Request failed') };
+  }
+  return { kind: 'credentials', overview: credentialsOverview(files, observedAt) };
+}
+
 export function usePoolOverview(): PoolOverviewState {
   const connectionStatus = useAuthStore((state) => state.connectionStatus);
   const connected = connectionStatus === 'connected';
   const dashboard = useDashboardOverview();
 
-  const [status, setStatus] = useState<PoolOverviewStatus>('idle');
-  const [overview, setOverview] = useState<PoolOverview | null>(null);
-  const [unsupported, setUnsupported] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [state, setState] = useState<PoolLoadState>(INITIAL_POOL_LOAD);
   const requestRef = useRef(0);
 
   const load = useCallback(async () => {
     if (!connected) return;
     const requestId = ++requestRef.current;
-    setStatus((current) => (current === 'ready' ? current : 'loading'));
-    setError(null);
-
-    let files: AuthFileItem[] = [];
-    let observedAt: string | null = null;
-    try {
-      const response = await authFilesApi.list();
-      files = response.files;
-      observedAt = response.observedAt ?? null;
-    } catch {
-      // The pool endpoint can still answer; credentials only add action handles here.
-    }
-
-    try {
-      const payload = await poolApi.getOverview();
-      if (requestId !== requestRef.current) return;
-      const normalized = normalizePoolOverview(payload);
-      setOverview({ ...normalized, accounts: attachCredentialHandles(normalized.accounts, files) });
-      setUnsupported(false);
-      setStatus('ready');
-      return;
-    } catch (poolError) {
-      if (requestId !== requestRef.current) return;
-      if (!isPoolEndpointMissing(poolError)) {
-        setError(getErrorMessage(poolError, 'Request failed'));
-        setStatus('error');
-        return;
-      }
-    }
-
-    // Older backend: derive the same model from the credentials list.
-    try {
-      if (files.length === 0 && !observedAt) {
-        const response = await authFilesApi.list();
-        if (requestId !== requestRef.current) return;
-        files = response.files;
-        observedAt = response.observedAt ?? null;
-      }
-      setOverview({
-        schemaVersion: 0,
-        observedAt: observedAt ?? new Date().toISOString(),
-        accounts: accountsFromCredentials(files, Date.now()),
-        policy: null,
-        stats: {
-          available: false,
-          reason: 'unsupported',
-          from: null,
-          to: null,
-          requests: 0,
-          successes: 0,
-          failures: 0,
-          failovers: 0,
-          inputTokens: null,
-          outputTokens: null,
-          averageLatencyMs: null,
-          persistence: null,
-        },
-        persistence: null,
-        source: 'credentials',
-      });
-      setUnsupported(true);
-      setStatus('ready');
-    } catch (listError) {
-      if (requestId !== requestRef.current) return;
-      setError(getErrorMessage(listError, 'Request failed'));
-      setStatus('error');
-    }
+    setState(startPoolLoad);
+    const outcome = await loadOutcome();
+    // A response from before a disconnect or a newer load must not land on the current state.
+    if (requestId !== requestRef.current) return;
+    setState((previous) => finishPoolLoad(previous, outcome, Date.now()));
   }, [connected]);
 
   useEffect(() => {
     if (!connected) {
       requestRef.current += 1;
-      setOverview(null);
-      setStatus('idle');
+      setState(INITIAL_POOL_LOAD);
       return;
     }
     void load();
@@ -143,16 +145,10 @@ export function usePoolOverview(): PoolOverviewState {
     [load]
   );
 
+  const view = useMemo(() => poolPageView(state), [state]);
+
   return useMemo(
-    () => ({
-      status,
-      overview,
-      unsupported,
-      error,
-      recentTraffic: dashboard.traffic,
-      refresh,
-      act,
-    }),
-    [status, overview, unsupported, error, dashboard.traffic, refresh, act]
+    () => ({ ...state, view, recentTraffic: dashboard.traffic, refresh, act }),
+    [state, view, dashboard.traffic, refresh, act]
   );
 }

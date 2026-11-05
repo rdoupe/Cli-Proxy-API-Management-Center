@@ -1,7 +1,8 @@
 /**
  * Overview: can the pool take requests right now, what needs a hand, how it has been going,
  * and the policy that decides who serves. Reads `/pool/overview`; on older backends the same
- * picture is derived from the credentials list and says so.
+ * picture is derived from the credentials list and says so. A failed read is shown as one, and
+ * a failed refresh keeps the last good picture and says how old it is.
  */
 
 import { useMemo } from 'react';
@@ -22,8 +23,8 @@ import { StatTile } from './components/StatTile';
 import {
   formatCount,
   formatLatency,
+  formatPastInstant,
   formatRate,
-  rateTone,
   reasonLabel,
   resetLabelKey,
 } from './format';
@@ -37,31 +38,36 @@ export function OverviewPage() {
   const connectionStatus = useAuthStore((state) => state.connectionStatus);
   const connected = connectionStatus === 'connected';
   const nowMs = useNow(connected);
-  const { status, overview, unsupported, error, recentTraffic, refresh } = usePoolOverview();
+  const { status, overview, view, error, checkedAtMs, recentTraffic, refresh } =
+    usePoolOverview();
   useHeaderRefresh(refresh, connected);
 
   const accounts = useMemo(() => overview?.accounts ?? [], [overview]);
-  const capacity = useMemo(() => summarizeCapacity(accounts), [accounts]);
-  const attention = useMemo(() => attentionReasons(accounts), [accounts]);
+  const policy = overview?.policy ?? null;
+  const capacity = useMemo(() => summarizeCapacity(accounts, policy), [accounts, policy]);
+  const attention = useMemo(() => attentionReasons(accounts, policy), [accounts, policy]);
   const stats = overview?.stats ?? null;
   const rate = stats && stats.available ? successRate(stats) : null;
 
   const observed = overview?.observedAt
     ? t('pool.observed', {
-        when: formatRelativeInstant(Date.parse(overview.observedAt), nowMs, i18n.language),
+        when: formatPastInstant(Date.parse(overview.observedAt), nowMs, i18n.language),
       })
     : null;
 
   const lede = !connected
     ? t('pool.overview_offline')
-    : status === 'loading' || status === 'idle'
+    : view.loading
       ? t('pool.overview_loading')
-      : capacity.total === 0
-        ? t('pool.overview_empty')
-        : capacity.ready === 0
-          ? t('pool.overview_none_ready', { total: capacity.total })
-          : t('pool.overview_ready', { ready: capacity.ready, total: capacity.total });
+      : view.failed
+        ? t('pool.load_failed')
+        : capacity.total === 0
+          ? t('pool.overview_empty')
+          : capacity.ready === 0
+            ? t('pool.overview_none_ready', { total: capacity.total })
+            : t('pool.overview_ready', { ready: capacity.ready, total: capacity.total });
 
+  const showData = connected && overview !== null;
 
   return (
     <div className={styles.page}>
@@ -70,11 +76,14 @@ export function OverviewPage() {
           <h1 className={styles.title}>{t('pool.overview_title')}</h1>
           <p className={styles.lede}>
             {lede}
-            {connected && status === 'ready' && capacity.attention > 0 ? (
+            {showData && capacity.attention > 0 ? (
               <>
                 {' '}
                 <b>{t('pool.overview_attention', { count: capacity.attention })}</b>
               </>
+            ) : null}
+            {showData && capacity.offByPolicy > 0 ? (
+              <> {t('pool.overview_off_policy', { count: capacity.offByPolicy })}</>
             ) : null}
           </p>
           {observed ? (
@@ -100,27 +109,42 @@ export function OverviewPage() {
         </div>
       </header>
 
-      {error ? (
+      {view.failed ? (
         <Notice tone="critical" title={t('pool.load_failed')}>
           {error}
         </Notice>
       ) : null}
 
-      {unsupported && status === 'ready' ? (
+      {view.stale ? (
+        <Notice tone="warning" title={t('pool.stale_title')}>
+          {checkedAtMs !== null
+            ? t('pool.stale_note', { when: formatPastInstant(checkedAtMs, nowMs, i18n.language) })
+            : null}
+          {error ? ` ${error}` : ''}
+        </Notice>
+      ) : null}
+
+      {view.olderBackend ? (
         <Notice tone="info" title={t('pool.backend_old_title')}>
           {t('pool.backend_old_overview')}
         </Notice>
       ) : null}
 
-      {status === 'loading' || status === 'idle' ? (
+      {overview?.homeMode ? (
+        <Notice tone="info" title={t('pool.home_mode_title')}>
+          {t('pool.home_mode_note')}
+        </Notice>
+      ) : null}
+
+      {view.loading ? (
         <div className={styles.panel}>
           <Skeleton height={26} />
         </div>
       ) : capacity.total > 0 ? (
         <section className={styles.panel} aria-label={t('pool.strip_aria')}>
-          <CapacityStrip accounts={accounts} onSelect={() => navigate('/accounts')} />
+          <CapacityStrip accounts={accounts} policy={policy} onSelect={() => navigate('/accounts')} />
         </section>
-      ) : status === 'ready' ? (
+      ) : view.empty ? (
         <section className={styles.panel}>
           <p className={styles.emptyRow}>{t('pool.overview_empty_hint')}</p>
           <div className={styles.headerActions}>
@@ -144,10 +168,14 @@ export function OverviewPage() {
           </div>
           <div className={styles.panel}>
             {attention.length === 0 ? (
-              <p className={styles.allGood}>
-                <IconCheckCircle2 size={18} />
-                {status === 'ready' ? t('pool.attention_none') : t('pool.overview_loading')}
-              </p>
+              view.failed ? (
+                <p className={styles.sectionNote}>{t('pool.load_failed')}</p>
+              ) : (
+                <p className={styles.allGood}>
+                  <IconCheckCircle2 size={18} />
+                  {showData ? t('pool.attention_none') : t('pool.overview_loading')}
+                </p>
+              )
             ) : (
               <ul className={styles.attentionList}>
                 {attention.slice(0, 6).map(({ account }) => (
@@ -187,7 +215,10 @@ export function OverviewPage() {
             <h2 className={styles.sectionTitle}>{t('pool.policy_title')}</h2>
           </div>
           <div className={styles.panel}>
-            <PolicyCard policy={overview?.policy ?? null} />
+            <PolicyCard
+              policy={policy}
+              missing={view.failed ? 'error' : view.olderBackend ? 'unsupported' : 'loading'}
+            />
           </div>
         </section>
       </div>
@@ -200,24 +231,30 @@ export function OverviewPage() {
           </Link>
         </div>
         {stats?.available ? (
-          <>
-            <div className={styles.tiles}>
-              <StatTile label={t('pool.requests')} value={formatCount(stats.requests)} hint={t('pool.attempts_hint')} />
-              <StatTile label={t('pool.success_rate')} value={formatRate(rate)} tone={rateTone(rate)} hint={t('pool.failures_hint', { count: stats.failures })} />
-              <StatTile label={t('pool.failovers')} value={formatCount(stats.failovers)} hint={t('pool.failovers_hint')} />
-              <StatTile label={t('pool.latency')} value={formatLatency(stats.averageLatencyMs, t('pool.not_reported'))} hint={t('pool.latency_hint')} />
-            </div>
-          </>
+          <div className={styles.tiles}>
+            <StatTile label={t('pool.requests')} value={formatCount(stats.requests)} hint={t('pool.attempts_hint')} />
+            <StatTile
+              label={t('pool.success_rate')}
+              value={formatRate(rate)}
+              hint={t('pool.success_rate_hint', { count: stats.failures })}
+            />
+            <StatTile label={t('pool.failovers')} value={formatCount(stats.failovers)} hint={t('pool.failovers_hint')} />
+            <StatTile label={t('pool.latency')} value={formatLatency(stats.averageLatencyMs, t('pool.not_reported'))} hint={t('pool.latency_hint')} />
+          </div>
         ) : (
           <div className={styles.panel}>
             <p className={styles.sectionNote}>
-              {unsupported
-                ? t('pool.recent_fallback_note', { minutes: recentTraffic.windowMinutes })
-                : stats?.reason
-                  ? t('pool.stats_unavailable_reason', { reason: stats.reason })
-                  : t('pool.stats_unavailable')}
+              {view.failed
+                ? t('pool.load_failed')
+                : view.olderBackend
+                  ? t('pool.recent_fallback_note', { minutes: recentTraffic.windowMinutes })
+                  : stats?.reason
+                    ? t('pool.stats_unavailable_reason', { reason: stats.reason })
+                    : view.loading
+                      ? t('pool.overview_loading')
+                      : t('pool.stats_unavailable')}
             </p>
-            {unsupported ? (
+            {view.olderBackend ? (
               <div style={{ marginTop: 12 }}>
                 <ThroughputChart traffic={recentTraffic} />
               </div>

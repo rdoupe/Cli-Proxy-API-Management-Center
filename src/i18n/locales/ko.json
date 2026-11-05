@@ -171,7 +171,6 @@
     "policy_name_existing": "엄격한 우선순위 순서",
     "policy_step_subscriptions": "요청은 제한되지 않은 가장 높은 우선순위의 구독 로그인으로 갑니다.",
     "policy_step_paid_fallback_on": "구독이 처리할 수 없으면 어느 공급자의 것이든 유료 API 키가 받습니다.",
-    "policy_step_paid_fallback_off": "어떤 공급자의 API 키도 예비로 쓰지 않으며, 크레딧을 쓰는 대신 요청이 실패합니다.",
     "policy_step_priority": "요청은 모델을 처리할 수 있는 계정이 있는 가장 높은 우선순위로 가며, 같은 우선순위는 분담합니다.",
     "policy_step_limits": "제한이나 오류에 걸린 계정은 타이머가 끝날 때까지 건너뛰고 다음 계정이 이어받습니다.",
     "policy_source_config": "구성된 우선순위 계층을 설명합니다. 백엔드에 별도의 풀 정책은 없습니다.",
@@ -187,7 +186,6 @@
     "requests": "업스트림 시도",
     "successes": "성공",
     "failures": "실패",
-    "failures_hint": "{{count}}개 실패",
     "success_rate": "시도 성공률",
     "failovers": "장애 조치",
     "failovers_hint": "다른 계정으로 넘어간 요청",
@@ -229,16 +227,18 @@
       "login_expired": "로그인 만료",
       "unavailable": "사용 불가",
       "unknown": "알 수 없음",
-      "paused": "일시정지"
+      "paused": "일시정지",
+      "off_by_policy": "정책으로 제외"
     },
     "state_hint": {
       "ready": "요청을 받을 수 있음",
       "rate_limited": "사용 제한에 도달; 재설정까지 건너뜀",
-      "out_of_credits": "요청 비용을 낼 크레딧이 없음",
+      "out_of_credits": "크레딧 없음. 자동 재확인 전까지 모든 모델에서 건너뜀",
       "login_expired": "로그인이 더 이상 유효하지 않음; 다시 로그인하세요",
       "unavailable": "풀이 이 계정을 사용할 수 없음",
       "unknown": "풀이 이 계정의 상태를 확인하지 못함",
-      "paused": "수동으로 순환에서 제외됨"
+      "paused": "수동으로 순환에서 제외됨",
+      "off_by_policy": "라우팅 정책이 절대 사용하지 않는 API 키"
     },
     "reason": {
       "quota": "사용 제한 도달",
@@ -293,7 +293,20 @@
     "policy_paid_fallback_hint": "끄면 어떤 공급자의 API 키도 쓰지 않습니다. 사용 가능한 구독이 없는 요청은 크레딧을 쓰지 않고 실패합니다.",
     "policy_saved": "라우팅 정책을 업데이트했습니다.",
     "policy_save_failed": "라우팅 정책을 저장할 수 없습니다.",
-    "attempts_hint": "계정에 대한 각 시도를 한 번으로 셉니다. 장애 조치 한 번은 실패 하나와 성공 하나를 더합니다."
+    "attempts_hint": "계정에 대한 각 시도를 한 번으로 셉니다. 장애 조치 한 번은 실패 하나와 성공 하나를 더합니다.",
+    "policy_name_existing_no_keys": "우선순위 순서, API 키는 사용 안 함",
+    "policy_name_subscriptions_only": "구독만 사용, API 키는 사용 안 함",
+    "policy_step_keys_excluded": "모든 제공자의 API 키 계정은 절대 사용되지 않습니다. 구독으로 처리할 수 없는 요청은 크레딧을 쓰는 대신 실패합니다.",
+    "policy_load_failed": "풀 정책을 읽을 수 없습니다.",
+    "filter_off_by_policy": "정책으로 제외",
+    "overview_off_policy": "{{count}}개가 정책으로 제외됨.",
+    "stale_title": "최근 새로 고침이 실패했습니다. 마지막으로 성공한 확인 결과를 표시합니다.",
+    "stale_note": "마지막 성공 확인 {{when}}.",
+    "balance_unknown": "잔액 알 수 없음",
+    "recheck_at": "{{when}} 자동 재확인",
+    "success_rate_hint": "{{count}}회 시도 실패. 요청은 다른 계정에서 성공할 수 있으므로 클라이언트 성공률이 아닙니다.",
+    "home_mode_title": "Home 모드가 켜져 있습니다.",
+    "home_mode_note": "이 정책이 아니라 Home 디스패처가 계정을 선택합니다. 상태와 통계는 메모리에만 보관됩니다."
   },
   "dashboard": {
     "hero_verdict_good": "모든 시스템 정상",
@@ -1811,7 +1824,7 @@
     "tier_backup": "대체 {{index}}",
     "tier_priority": "우선순위 {{priority}}",
     "tier_priority_changed": "우선순위 {{from}} → {{to}}",
-    "tier_state_active": "요청 처리 중",
+    "tier_state_active": "요청을 받게 됨",
     "tier_state_standby": "대기: 위의 모든 계층을 사용할 수 없을 때 사용",
     "tier_state_skipped_model": "이 모델을 제공하지 않아 요청이 이 계층을 건너뜁니다",
     "tier_state_skipped": "사용 가능한 구성원이 없어 요청이 이 계층을 건너뜁니다",
@@ -1887,7 +1900,12 @@
     "unsaved_cancel": "머무르기",
     "duration_seconds": "{{count}}초",
     "duration_minutes": "{{count}}분",
-    "duration_hours": "{{count}}시간"
+    "duration_hours": "{{count}}시간",
+    "share_hint": "현재 전략에서 이 계층 내 예상 비율이며 측정된 트래픽이 아닙니다",
+    "state_policy_off": "정책으로 제외",
+    "state_policy_backup": "정책상 예비",
+    "policy_note_subscriptions_first": "풀 정책은 모든 구독을 API 키보다 먼저 시도합니다. 계층은 설정된 우선순위를 보여 주며, API 키는 더 높은 계층에 있어도 예비입니다.",
+    "policy_note_keys_off": "풀 정책은 어떤 제공자의 API 키도 사용하지 않습니다. API 키 구성원은 표시되지만 요청을 받지 않습니다."
   },
   "plugin_management": {
     "title": "플러그인 관리",

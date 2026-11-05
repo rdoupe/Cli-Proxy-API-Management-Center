@@ -171,7 +171,6 @@
     "policy_name_existing": "嚴格優先順序",
     "policy_step_subscriptions": "請求送往優先順序最高且未受限的訂閱登入。",
     "policy_step_paid_fallback_on": "若沒有訂閱可用，則由付費 API 金鑰接手，不論金鑰屬於哪個提供商。",
-    "policy_step_paid_fallback_off": "任何提供商的 API 金鑰都不作為備援；請求會失敗而不消耗餘額。",
     "policy_step_priority": "請求送往有帳號能服務該模型的最高優先順序；相同優先順序共同分擔。",
     "policy_step_limits": "觸發限額或出錯的帳號會被跳過，直到計時結束，由下一個接手。",
     "policy_source_config": "這裡描述的是設定的優先順序層級；後端沒有獨立的帳號池策略。",
@@ -187,7 +186,6 @@
     "requests": "上游嘗試",
     "successes": "成功",
     "failures": "失敗",
-    "failures_hint": "{{count}} 個失敗",
     "success_rate": "嘗試成功率",
     "failovers": "容錯移轉",
     "failovers_hint": "轉到其他帳號的請求",
@@ -229,16 +227,18 @@
       "login_expired": "登入過期",
       "unavailable": "不可用",
       "unknown": "未知",
-      "paused": "已暫停"
+      "paused": "已暫停",
+      "off_by_policy": "策略停用"
     },
     "state_hint": {
       "ready": "可以接單",
       "rate_limited": "觸發用量限制；重置前跳過",
-      "out_of_credits": "沒有餘額支付請求",
+      "out_of_credits": "餘額不足；所有模型都會跳過，直到自動重新檢查",
       "login_expired": "登入已失效；請重新登入",
       "unavailable": "帳號池無法使用此帳號",
       "unknown": "帳號池尚未確認此帳號狀態",
-      "paused": "已手動移出輪替"
+      "paused": "已手動移出輪替",
+      "off_by_policy": "路由策略永不使用的 API 金鑰"
     },
     "reason": {
       "quota": "已達用量限制",
@@ -293,7 +293,20 @@
     "policy_paid_fallback_hint": "關閉後不會使用任何提供商的 API 金鑰；沒有可用訂閱時請求會失敗，而不是消耗餘額。",
     "policy_saved": "路由策略已更新。",
     "policy_save_failed": "無法儲存路由策略。",
-    "attempts_hint": "每次對帳號的嘗試計一次；一次容錯移轉記為一次失敗加一次成功。"
+    "attempts_hint": "每次對帳號的嘗試計一次；一次容錯移轉記為一次失敗加一次成功。",
+    "policy_name_existing_no_keys": "依優先順序，永不使用 API 金鑰",
+    "policy_name_subscriptions_only": "僅訂閱，永不使用 API 金鑰",
+    "policy_step_keys_excluded": "任何供應商的 API 金鑰帳戶都不會被使用；沒有訂閱能處理的請求會失敗，而不是消耗額度。",
+    "policy_load_failed": "無法讀取帳戶池策略。",
+    "filter_off_by_policy": "策略停用",
+    "overview_off_policy": "{{count}} 個因策略停用。",
+    "stale_title": "最近一次重新整理失敗；顯示的是上次成功檢查的結果。",
+    "stale_note": "上次成功檢查：{{when}}。",
+    "balance_unknown": "餘額未知",
+    "recheck_at": "{{when}}自動重新檢查",
+    "success_rate_hint": "{{count}} 次嘗試失敗。請求仍可能在其他帳戶上成功，因此這不是用戶端成功率。",
+    "home_mode_title": "Home 模式已開啟。",
+    "home_mode_note": "由 Home 調度器選擇帳戶，而非此策略；健康狀態與統計僅保存在記憶體中。"
   },
   "dashboard": {
     "hero_verdict_good": "運行平穩",
@@ -1837,7 +1850,7 @@
     "tier_backup": "備用 {{index}}",
     "tier_priority": "優先級 {{priority}}",
     "tier_priority_changed": "優先級 {{from}} → {{to}}",
-    "tier_state_active": "正在承接請求",
+    "tier_state_active": "將承接請求",
     "tier_state_standby": "待命，上層全部不可用時啟用",
     "tier_state_skipped_model": "不提供此模型，請求會略過這一層",
     "tier_state_skipped": "沒有可用成員，請求會略過這一層",
@@ -1913,7 +1926,12 @@
     "unsaved_cancel": "留下",
     "duration_seconds": "{{count}} 秒",
     "duration_minutes": "{{count}} 分鐘",
-    "duration_hours": "{{count}} 小時"
+    "duration_hours": "{{count}} 小時",
+    "share_hint": "目前策略下此層級內的預期份額，並非實際流量",
+    "state_policy_off": "策略停用",
+    "state_policy_backup": "策略備用",
+    "policy_note_subscriptions_first": "帳戶池策略會先嘗試所有訂閱，再使用任何 API 金鑰。層級顯示的是設定的優先順序；即使位於更高層級，API 金鑰也只是備用。",
+    "policy_note_keys_off": "帳戶池策略不會使用任何供應商的 API 金鑰。API 金鑰成員仍會顯示，但不承接請求。"
   },
   "plugin_management": {
     "title": "插件管理",

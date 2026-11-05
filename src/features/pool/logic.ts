@@ -11,6 +11,7 @@ import {
   POOL_ACCOUNT_STATES,
   POOL_STATS_RANGES,
   type PoolAccount,
+  type PoolAccountDisplayState,
   type PoolAccountKind,
   type PoolAccountState,
   type PoolBalance,
@@ -117,6 +118,7 @@ const readPoolAccount = (value: unknown, index: number): PoolAccount | null => {
     kind: readKind(value.kind),
     state,
     reason: readText(value.reason),
+    healthReason: readText(value.healthReason),
     eligible: value.eligible === true,
     priority: readNullableNumber(value.priority),
     resetAt: readIsoDate(value.resetAt),
@@ -152,6 +154,7 @@ export function normalizePoolOverview(payload: unknown): PoolOverview {
     policy: readPolicy(record.policy),
     stats,
     persistence: readPersistence(record.persistence),
+    homeMode: record.homeMode === true,
     source: 'pool',
   };
 }
@@ -242,6 +245,7 @@ export function normalizePoolExplain(payload: unknown): PoolExplain {
       : [],
     candidates,
     reason: readText(record.reason),
+    note: readText(record.note),
   };
 }
 
@@ -332,6 +336,7 @@ export function accountsFromCredentials(files: readonly AuthFileItem[], nowMs: n
       kind,
       state,
       reason,
+      healthReason: reason,
       eligible: state === 'ready',
       priority: typeof file.priority === 'number' ? file.priority : null,
       resetAt,
@@ -353,21 +358,50 @@ export interface PoolCapacity {
   total: number;
   ready: number;
   paused: number;
+  /** API keys the policy excludes: not a health problem, and never counted as attention. */
+  offByPolicy: number;
   attention: number;
 }
+
+/**
+ * Policy exclusion is structural: the policy says API keys are never used, and this is an API
+ * key. The backend also reports `eligible: false` and an English reason; neither is parsed.
+ * A paused account stays "paused": the operator's choice is the more useful fact.
+ */
+export const isOffByPolicy = (account: PoolAccount, policy: PoolPolicy | null): boolean =>
+  policy !== null &&
+  policy.allowPaidFallback === false &&
+  account.kind === 'api_key' &&
+  account.state !== 'paused';
+
+export const displayState = (
+  account: PoolAccount,
+  policy: PoolPolicy | null
+): PoolAccountDisplayState => (isOffByPolicy(account, policy) ? 'off_by_policy' : account.state);
 
 /** The backend's verdict: an account the pool would still hand a request to. */
 export const canServe = (account: PoolAccount): boolean =>
   account.eligible && account.state !== 'paused';
 
-export function summarizeCapacity(accounts: readonly PoolAccount[]): PoolCapacity {
+export function summarizeCapacity(
+  accounts: readonly PoolAccount[],
+  policy: PoolPolicy | null = null
+): PoolCapacity {
   let ready = 0;
   let paused = 0;
+  let offByPolicy = 0;
   accounts.forEach((account) => {
     if (account.state === 'paused') paused += 1;
+    else if (isOffByPolicy(account, policy)) offByPolicy += 1;
     else if (canServe(account)) ready += 1;
   });
-  return { total: accounts.length, ready, paused, attention: accounts.length - ready - paused };
+  return {
+    total: accounts.length,
+    ready,
+    paused,
+    offByPolicy,
+    attention: accounts.length - ready - paused - offByPolicy,
+  };
 }
 
 export interface AttentionEntry {
@@ -375,8 +409,14 @@ export interface AttentionEntry {
   state: PoolAccountState;
 }
 
-/** Everything that cannot serve right now and was not paused on purpose. Worst first. */
-export function attentionReasons(accounts: readonly PoolAccount[]): AttentionEntry[] {
+/**
+ * Everything that cannot serve right now, was not paused on purpose and is not merely excluded
+ * by policy. Worst first.
+ */
+export function attentionReasons(
+  accounts: readonly PoolAccount[],
+  policy: PoolPolicy | null = null
+): AttentionEntry[] {
   const severity: Record<PoolAccountState, number> = {
     login_expired: 0,
     out_of_credits: 1,
@@ -387,7 +427,10 @@ export function attentionReasons(accounts: readonly PoolAccount[]): AttentionEnt
     paused: 6,
   };
   return accounts
-    .filter((account) => account.state !== 'paused' && !canServe(account))
+    .filter(
+      (account) =>
+        account.state !== 'paused' && !isOffByPolicy(account, policy) && !canServe(account)
+    )
     .map((account) => ({ account, state: account.state }))
     .sort((left, right) => severity[left.state] - severity[right.state]);
 }
@@ -408,7 +451,10 @@ const STATE_ORDER: Record<PoolAccountState, number> = {
   paused: 6,
 };
 
-export function groupAccountsByProvider(accounts: readonly PoolAccount[]): ProviderGroup[] {
+export function groupAccountsByProvider(
+  accounts: readonly PoolAccount[],
+  policy: PoolPolicy | null = null
+): ProviderGroup[] {
   const groups = new Map<string, PoolAccount[]>();
   accounts.forEach((account) => {
     const list = groups.get(account.provider) ?? [];
@@ -424,7 +470,7 @@ export function groupAccountsByProvider(accounts: readonly PoolAccount[]): Provi
           (right.priority ?? -Infinity) - (left.priority ?? -Infinity) ||
           left.label.localeCompare(right.label)
       ),
-      capacity: summarizeCapacity(members),
+      capacity: summarizeCapacity(members, policy),
     }))
     .sort((left, right) => right.accounts.length - left.accounts.length || left.provider.localeCompare(right.provider));
 }
@@ -438,19 +484,27 @@ export function successRate(totals: { requests: number; successes: number }): nu
  * Accounts page filters
  * ------------------------------------------------------------------------------------------- */
 
-export type AccountsFilter = 'all' | 'attention' | 'paused';
+export type AccountsFilter = 'all' | 'attention' | 'off_by_policy' | 'paused';
 
-export const ACCOUNT_FILTERS: readonly AccountsFilter[] = ['all', 'attention', 'paused'];
+export const ACCOUNT_FILTERS: readonly AccountsFilter[] = [
+  'all',
+  'attention',
+  'off_by_policy',
+  'paused',
+];
 
 export function filterAccounts(
   accounts: readonly PoolAccount[],
   filter: AccountsFilter,
-  search: string
+  search: string,
+  policy: PoolPolicy | null = null
 ): PoolAccount[] {
   const needle = search.trim().toLowerCase();
   return accounts.filter((account) => {
+    const off = isOffByPolicy(account, policy);
     if (filter === 'paused' && account.state !== 'paused') return false;
-    if (filter === 'attention' && (account.state === 'paused' || canServe(account))) {
+    if (filter === 'off_by_policy' && !off) return false;
+    if (filter === 'attention' && (account.state === 'paused' || off || canServe(account))) {
       return false;
     }
     if (!needle) return true;

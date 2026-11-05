@@ -16,7 +16,7 @@ import { getErrorMessage } from '@/utils/helpers';
 import { AccountRow } from './components/AccountRow';
 import { Notice } from './components/Notice';
 import { ProviderMark } from './components/ProviderMark';
-import { providerLabel } from './format';
+import { formatPastInstant, providerLabel } from './format';
 import { usePoolOverview, type PoolAccountAction } from './hooks/usePoolOverview';
 import {
   ACCOUNT_FILTERS,
@@ -28,7 +28,7 @@ import {
 import styles from './pool.module.scss';
 
 export function AccountsPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const connectionStatus = useAuthStore((state) => state.connectionStatus);
   const connected = connectionStatus === 'connected';
   const showNotification = useNotificationStore((state) => state.showNotification);
@@ -41,13 +41,17 @@ export function AccountsPage() {
   const [search, setSearch] = useState('');
   const [busyId, setBusyId] = useState<string | null>(null);
 
-  const { status, overview, unsupported, error, refresh, act } = usePoolOverview();
+  const { status, overview, view, error, checkedAtMs, refresh, act } = usePoolOverview();
   useHeaderRefresh(refresh, connected);
 
   const accounts = useMemo(() => overview?.accounts ?? [], [overview]);
-  const capacity = useMemo(() => summarizeCapacity(accounts), [accounts]);
-  const visible = useMemo(() => filterAccounts(accounts, filter, search), [accounts, filter, search]);
-  const groups = useMemo(() => groupAccountsByProvider(visible), [visible]);
+  const policy = overview?.policy ?? null;
+  const capacity = useMemo(() => summarizeCapacity(accounts, policy), [accounts, policy]);
+  const visible = useMemo(
+    () => filterAccounts(accounts, filter, search, policy),
+    [accounts, filter, search, policy]
+  );
+  const groups = useMemo(() => groupAccountsByProvider(visible, policy), [visible, policy]);
   const unknownLabel = t('pool.provider_unknown');
 
   const setFilter = (next: AccountsFilter) => {
@@ -72,11 +76,24 @@ export function AccountsPage() {
     [act, showNotification, t]
   );
 
-  const counts = {
+  const counts: Record<AccountsFilter, number> = {
     all: capacity.total,
     attention: capacity.attention,
+    off_by_policy: capacity.offByPolicy,
     paused: capacity.paused,
   };
+  // The policy chip only earns its place when the policy actually excludes something.
+  const chips = ACCOUNT_FILTERS.filter(
+    (entry) => entry !== 'off_by_policy' || counts.off_by_policy > 0 || filter === 'off_by_policy'
+  );
+
+  const lede = !connected
+    ? t('pool.overview_offline')
+    : view.loading
+      ? t('pool.overview_loading')
+      : view.failed
+        ? t('pool.load_failed')
+        : t('pool.accounts_lede', { ready: capacity.ready, total: capacity.total });
 
   return (
     <div className={styles.page}>
@@ -84,9 +101,10 @@ export function AccountsPage() {
         <div>
           <h1 className={styles.title}>{t('pool.accounts_title')}</h1>
           <p className={styles.lede}>
-            {status === 'ready'
-              ? t('pool.accounts_lede', { ready: capacity.ready, total: capacity.total })
-              : t('pool.overview_loading')}
+            {lede}
+            {overview && capacity.offByPolicy > 0 ? (
+              <> {t('pool.overview_off_policy', { count: capacity.offByPolicy })}</>
+            ) : null}
           </p>
         </div>
         <div className={styles.headerActions}>
@@ -109,12 +127,20 @@ export function AccountsPage() {
         </div>
       </header>
 
-      {error ? (
+      {view.failed ? (
         <Notice tone="critical" title={t('pool.load_failed')}>
           {error}
         </Notice>
       ) : null}
-      {unsupported && status === 'ready' ? (
+      {view.stale ? (
+        <Notice tone="warning" title={t('pool.stale_title')}>
+          {checkedAtMs !== null
+            ? t('pool.stale_note', { when: formatPastInstant(checkedAtMs, nowMs, i18n.language) })
+            : null}
+          {error ? ` ${error}` : ''}
+        </Notice>
+      ) : null}
+      {view.olderBackend ? (
         <Notice tone="info" title={t('pool.backend_old_title')}>
           {t('pool.backend_old_accounts')}
         </Notice>
@@ -122,7 +148,7 @@ export function AccountsPage() {
 
       <div className={styles.toolbar}>
         <div className={styles.chips} role="group" aria-label={t('pool.filter_aria')}>
-          {ACCOUNT_FILTERS.map((entry) => (
+          {chips.map((entry) => (
             <button
               key={entry}
               type="button"
@@ -145,7 +171,7 @@ export function AccountsPage() {
         />
       </div>
 
-      {status === 'loading' || status === 'idle' ? (
+      {view.loading ? (
         <div className={styles.group}>
           <div className={styles.groupHead}>
             <Skeleton width={120} height={16} />
@@ -154,7 +180,7 @@ export function AccountsPage() {
             <Skeleton width="100%" height={18} />
           </div>
         </div>
-      ) : groups.length === 0 ? (
+      ) : view.failed ? null : groups.length === 0 ? (
         <div className={styles.group}>
           <p className={styles.emptyRow}>
             {capacity.total === 0 ? t('pool.overview_empty_hint') : t('pool.accounts_no_match')}
@@ -176,6 +202,7 @@ export function AccountsPage() {
                 <AccountRow
                   key={account.id}
                   account={account}
+                  policy={policy}
                   nowMs={nowMs}
                   busy={busyId === account.id}
                   disabled={!connected}

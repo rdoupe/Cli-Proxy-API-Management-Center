@@ -611,11 +611,6 @@ export function MainLayout() {
           path: '/accounts',
           labelKey: 'nav.accounts',
           metaKey: 'nav_meta.accounts',
-          badge: authFilesCount ?? undefined,
-          badgeLabel:
-            typeof authFilesCount === 'number'
-              ? t('sidebar.auth_files_count', { count: authFilesCount })
-              : undefined,
           icon: sidebarIcons.authFiles,
         },
         {
@@ -652,6 +647,11 @@ export function MainLayout() {
           path: '/auth-files',
           labelKey: 'nav.auth_files',
           metaKey: 'nav_meta.auth_files',
+          badge: authFilesCount ?? undefined,
+          badgeLabel:
+            typeof authFilesCount === 'number'
+              ? t('sidebar.auth_files_count', { count: authFilesCount })
+              : undefined,
           icon: sidebarIcons.authFiles,
         },
         quickStartNavItem,

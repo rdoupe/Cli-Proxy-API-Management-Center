@@ -171,7 +171,6 @@
     "policy_name_existing": "Katı öncelik sırası",
     "policy_step_subscriptions": "İstek, sınırlanmamış en yüksek öncelikli abonelik girişine gider.",
     "policy_step_paid_fallback_on": "Hiçbir abonelik karşılayamazsa, hangi sağlayıcıya ait olursa olsun ücretli bir API anahtarı alır.",
-    "policy_step_paid_fallback_off": "Hiçbir sağlayıcıda API anahtarları yedek olarak kullanılmaz; istek kredi harcamak yerine başarısız olur.",
     "policy_step_priority": "İstek, modeli karşılayabilen bir hesabı olan en yüksek önceliğe gider; eşit öncelikler paylaşır.",
     "policy_step_limits": "Sınıra veya hataya takılan hesap, sayacı bitene kadar atlanır ve sıradaki devralır.",
     "policy_source_config": "Bu, yapılandırılmış öncelik katmanlarını anlatır; arka ucun ayrı bir havuz ilkesi yok.",
@@ -187,7 +186,6 @@
     "requests": "Upstream denemeleri",
     "successes": "Başarılı",
     "failures": "Başarısız",
-    "failures_hint": "{{count}} başarısız",
     "success_rate": "Deneme başarı oranı",
     "failovers": "Yedeğe geçişler",
     "failovers_hint": "Başka hesaba taşınan istekler",
@@ -229,16 +227,18 @@
       "login_expired": "Giriş süresi doldu",
       "unavailable": "Kullanılamıyor",
       "unknown": "Bilinmiyor",
-      "paused": "Duraklatıldı"
+      "paused": "Duraklatıldı",
+      "off_by_policy": "İlkeyle kapalı"
     },
     "state_hint": {
       "ready": "İstek alabilir",
       "rate_limited": "Kullanım sınırına ulaştı; sıfırlanana kadar atlanır",
-      "out_of_credits": "İstekleri ödeyecek kredi kalmadı",
+      "out_of_credits": "Kredi kalmadı; otomatik yeniden denetime kadar her model için atlanır",
       "login_expired": "Giriş artık çalışmıyor; yeniden giriş yapın",
       "unavailable": "Havuz bu hesabı kullanamadı",
       "unknown": "Havuz bu hesabın durumunu doğrulamadı",
-      "paused": "Elle rotasyondan çıkarıldı"
+      "paused": "Elle rotasyondan çıkarıldı",
+      "off_by_policy": "Yönlendirme ilkesinin hiç kullanmadığı bir API anahtarı"
     },
     "reason": {
       "quota": "Kullanım sınırına ulaşıldı",
@@ -293,7 +293,20 @@
     "policy_paid_fallback_hint": "Kapalıysa hiçbir sağlayıcının API anahtarı kullanılmaz; uygun aboneliği olmayan istek kredi harcamak yerine başarısız olur.",
     "policy_saved": "Yönlendirme ilkesi güncellendi.",
     "policy_save_failed": "Yönlendirme ilkesi kaydedilemedi.",
-    "attempts_hint": "Bir hesaptaki her deneme bir kez sayılır; bir yedeğe geçiş bir hata ve bir başarı ekler."
+    "attempts_hint": "Bir hesaptaki her deneme bir kez sayılır; bir yedeğe geçiş bir hata ve bir başarı ekler.",
+    "policy_name_existing_no_keys": "Öncelik sırası, API anahtarları hiç kullanılmaz",
+    "policy_name_subscriptions_only": "Yalnızca abonelikler, API anahtarları hiç kullanılmaz",
+    "policy_step_keys_excluded": "API anahtarı hesapları hiçbir sağlayıcı için kullanılmaz; hiçbir aboneliğin karşılayamadığı istek kredi harcamak yerine başarısız olur.",
+    "policy_load_failed": "Havuz ilkesi okunamadı.",
+    "filter_off_by_policy": "İlkeyle kapalı",
+    "overview_off_policy": "{{count}} tanesi ilkeyle kapalı.",
+    "stale_title": "Son yenileme başarısız oldu; son başarılı denetim gösteriliyor.",
+    "stale_note": "Son başarılı denetim {{when}}.",
+    "balance_unknown": "Bakiye bilinmiyor",
+    "recheck_at": "{{when}} otomatik yeniden denetlenir",
+    "success_rate_hint": "{{count}} deneme başarısız. İstek başka bir hesapta yine de başarılı olabilir; bu istemci başarı oranı değildir.",
+    "home_mode_title": "Home modu açık.",
+    "home_mode_note": "Hesapları bu ilke değil Home dağıtıcısı seçer; sağlık ve istatistikler yalnızca bellekte tutulur."
   },
   "dashboard": {
     "hero_verdict_good": "Tüm Sistemler Dengede",
@@ -1811,7 +1824,7 @@
     "tier_backup": "Yedek {{index}}",
     "tier_priority": "Öncelik {{priority}}",
     "tier_priority_changed": "Öncelik {{from}} → {{to}}",
-    "tier_state_active": "İstekleri karşılıyor",
+    "tier_state_active": "İstekleri alır",
     "tier_state_standby": "Beklemede, üstteki tüm katmanlar kullanılamazsa devreye girer",
     "tier_state_skipped_model": "Bu modeli sunmuyor; istekler bu katmanı atlar",
     "tier_state_skipped": "Kullanılabilir üye yok; istekler bu katmanı atlar",
@@ -1887,7 +1900,12 @@
     "unsaved_cancel": "Kal",
     "duration_seconds": "{{count}} sn",
     "duration_minutes": "{{count}} dk",
-    "duration_hours": "{{count}} sa"
+    "duration_hours": "{{count}} sa",
+    "share_hint": "Geçerli stratejide bu katman içindeki beklenen pay; ölçülmüş trafik değil",
+    "state_policy_off": "İlkeyle kapalı",
+    "state_policy_backup": "İlke gereği yedek",
+    "policy_note_subscriptions_first": "Havuz ilkesi her aboneliği herhangi bir API anahtarından önce dener. Katmanlar yapılandırılmış öncelikleri gösterir; API anahtarı daha üst katmanda olsa da yedektir.",
+    "policy_note_keys_off": "Havuz ilkesi hiçbir sağlayıcı için API anahtarı kullanmaz. API anahtarı üyeleri gösterilir ama istek almaz."
   },
   "plugin_management": {
     "title": "Eklenti Yönetimi",

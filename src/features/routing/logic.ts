@@ -25,6 +25,7 @@ import type {
   RoutingStrategy,
   RoutingTier,
 } from '@/types/routing';
+import type { PoolPolicy } from '@/types/pool';
 
 /** Gap between newly numbered tiers, leaving room for later insertions. */
 export const TIER_STEP = 10;
@@ -433,47 +434,82 @@ const memberUnits = (
   return member.weights.reduce((sum, _, index) => sum + Math.max(0, weights[index] ?? 1), 0);
 };
 
+/** A member's own ability to serve, before the pool policy has its say. */
+function memberBaseState(
+  board: RoutingBoard,
+  draft: RoutingDraft,
+  catalog: RoutingModelCatalog,
+  member: RoutingMember,
+  model: string | null,
+  nowMs: number
+): { state: RouteMemberState; units: number } {
+  const models = model ? memberModels(member, catalog) : [];
+  if (member.disabled) return { state: 'disabled', units: 0 };
+  if (model && models === null) return { state: 'unknown', units: 0 };
+  if (model && !memberServesModel(member, models ?? [], model, board.forceModelPrefix)) {
+    return { state: 'ineligible', units: 0 };
+  }
+  if (activeCooldownSeconds(member, model, nowMs) > 0) return { state: 'cooling', units: 0 };
+  if (member.unavailable && !member.cooldowns?.records) return { state: 'blocked', units: 0 };
+  const units = memberUnits(member, draft.weights[member.key] ?? [], draft.settings.strategy);
+  return units > 0 ? { state: 'serving', units } : { state: 'excluded', units: 0 };
+}
+
 /**
  * Where a request goes under the draft: the first tier with a member able to serve takes it,
  * tiers above it are skipped (no such model, or cooling down), tiers below wait.
+ *
+ * The pool policy, when the backend has one, overrides the configured order for API keys:
+ * with paid fallback off they take nothing; with subscriptions first they only take requests
+ * once no subscription in any tier can, whatever their priority says.
  */
 export function resolveRoute(
   board: RoutingBoard,
   draft: RoutingDraft,
   catalog: RoutingModelCatalog,
   model: string | null,
-  nowMs: number
+  nowMs: number,
+  policy: PoolPolicy | null = null
 ): RoutePreview {
   const byKey = new Map(board.members.map((member) => [member.key, member]));
   const strategy = draft.settings.strategy;
+  const keysOff = policy?.allowPaidFallback === false;
+  const base = new Map<string, { state: RouteMemberState; units: number }>();
+  draft.tiers.forEach((tier) =>
+    tier.memberKeys.forEach((key) => {
+      const member = byKey.get(key);
+      if (member) base.set(key, memberBaseState(board, draft, catalog, member, model, nowMs));
+    })
+  );
+  const subscriptionServes =
+    policy?.strategy === 'subscriptions_first' &&
+    [...base.entries()].some(
+      ([key, entry]) =>
+        entry.state === 'serving' && byKey.get(key)?.accountKind === 'subscription'
+    );
+
   let hasActive = false;
   const tiers: RouteTier[] = draft.tiers.map((tier) => {
     const units = new Map<string, number>();
     const members: RouteMember[] = tier.memberKeys.flatMap((key) => {
       const member = byKey.get(key);
-      if (!member) return [];
-      let state: RouteMemberState;
-      const models = model ? memberModels(member, catalog) : [];
-      if (member.disabled) state = 'disabled';
-      else if (model && models === null) state = 'unknown';
-      else if (model && !memberServesModel(member, models ?? [], model, board.forceModelPrefix)) {
-        state = 'ineligible';
-      } else if (activeCooldownSeconds(member, model, nowMs) > 0) state = 'cooling';
-      else if (member.unavailable && !member.cooldowns?.records) state = 'blocked';
-      else {
-        const value = memberUnits(member, draft.weights[key] ?? [], strategy);
-        if (value > 0) {
-          units.set(key, value);
-          state = 'serving';
-        } else state = 'excluded';
-      }
+      const entry = base.get(key);
+      if (!member || !entry) return [];
+      let { state } = entry;
+      const isKey = member.accountKind === 'api_key';
+      if (isKey && keysOff && state !== 'disabled' && state !== 'ineligible') state = 'policy_off';
+      else if (isKey && subscriptionServes && state === 'serving') state = 'policy_backup';
+      else if (state === 'serving') units.set(key, entry.units);
       return [{ key, state, share: null }];
     });
 
     const total = [...units.values()].reduce((sum, value) => sum + value, 0);
     const has = (state: RouteMemberState) => members.some((member) => member.state === state);
     const candidates = members.filter(
-      (member) => member.state !== 'ineligible' && member.state !== 'disabled'
+      (member) =>
+        member.state !== 'ineligible' &&
+        member.state !== 'disabled' &&
+        member.state !== 'policy_off'
     );
     let state: RouteTierState;
     if (!hasActive && total > 0) {
@@ -486,7 +522,7 @@ export function resolveRoute(
         }
       }
     } else if (candidates.length === 0) state = 'skipped';
-    else if (hasActive) state = 'standby';
+    else if (hasActive || has('policy_backup')) state = 'standby';
     else if (has('cooling') || has('blocked')) state = 'cooling';
     else if (has('unknown')) state = 'unknown';
     else state = 'skipped';

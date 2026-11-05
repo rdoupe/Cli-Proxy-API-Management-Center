@@ -71,6 +71,19 @@ $label-x: $tier-pad + 1px + $index-size + 10px; // where tier names begin
   gap: 16px;
 }
 
+.policyNote {
+  text-wrap: pretty;
+  max-width: 72ch;
+  margin: 0;
+  padding: 10px 14px;
+  border-left: 3px solid var(--amber-color);
+  border-radius: 0 10px 10px 0;
+  background: color-mix(in srgb, var(--amber-color) 10%, transparent);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
 .footnote {
   text-wrap: pretty;
   max-width: 72ch;

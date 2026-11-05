@@ -171,7 +171,6 @@
     "policy_name_existing": "严格优先级顺序",
     "policy_step_subscriptions": "请求发往优先级最高且未受限的订阅登录。",
     "policy_step_paid_fallback_on": "若没有订阅可用，则由付费 API 密钥接手，不论密钥属于哪个提供商。",
-    "policy_step_paid_fallback_off": "任何提供商的 API 密钥都不作为兜底；请求会失败而不消耗余额。",
     "policy_step_priority": "请求发往有账号能服务该模型的最高优先级；相同优先级共同分担。",
     "policy_step_limits": "触发限额或出错的账号会被跳过，直到计时结束，由下一个接手。",
     "policy_source_config": "这里描述的是配置的优先级层级；后端没有单独的账号池策略。",
@@ -187,7 +186,6 @@
     "requests": "上游尝试",
     "successes": "成功",
     "failures": "失败",
-    "failures_hint": "{{count}} 个失败",
     "success_rate": "尝试成功率",
     "failovers": "故障转移",
     "failovers_hint": "转到其他账号的请求",
@@ -229,16 +227,18 @@
       "login_expired": "登录过期",
       "unavailable": "不可用",
       "unknown": "未知",
-      "paused": "已暂停"
+      "paused": "已暂停",
+      "off_by_policy": "策略禁用"
     },
     "state_hint": {
       "ready": "可以接单",
       "rate_limited": "触发用量限制；重置前跳过",
-      "out_of_credits": "没有余额支付请求",
+      "out_of_credits": "余额不足；所有模型都会跳过，直到自动重新检查",
       "login_expired": "登录已失效；请重新登录",
       "unavailable": "账号池无法使用此账号",
       "unknown": "账号池尚未确认此账号状态",
-      "paused": "已手动移出轮换"
+      "paused": "已手动移出轮换",
+      "off_by_policy": "路由策略永不使用的 API 密钥"
     },
     "reason": {
       "quota": "已达用量限制",
@@ -293,7 +293,20 @@
     "policy_paid_fallback_hint": "关闭后不会使用任何提供商的 API 密钥；没有可用订阅时请求会失败，而不是消耗余额。",
     "policy_saved": "路由策略已更新。",
     "policy_save_failed": "无法保存路由策略。",
-    "attempts_hint": "每次对账号的尝试计一次；一次故障转移记为一次失败加一次成功。"
+    "attempts_hint": "每次对账号的尝试计一次；一次故障转移记为一次失败加一次成功。",
+    "policy_name_existing_no_keys": "按优先级顺序，永不使用 API 密钥",
+    "policy_name_subscriptions_only": "仅订阅，永不使用 API 密钥",
+    "policy_step_keys_excluded": "任何提供商的 API 密钥账户都不会被使用；没有订阅能处理的请求会失败，而不是消耗额度。",
+    "policy_load_failed": "无法读取账户池策略。",
+    "filter_off_by_policy": "策略禁用",
+    "overview_off_policy": "{{count}} 个因策略禁用。",
+    "stale_title": "最近一次刷新失败；显示的是上次成功检查的结果。",
+    "stale_note": "上次成功检查：{{when}}。",
+    "balance_unknown": "余额未知",
+    "recheck_at": "{{when}}自动重新检查",
+    "success_rate_hint": "{{count}} 次尝试失败。请求仍可能在其他账户上成功，因此这不是客户端成功率。",
+    "home_mode_title": "Home 模式已开启。",
+    "home_mode_note": "由 Home 调度器选择账户，而非此策略；健康状态与统计仅保存在内存中。"
   },
   "dashboard": {
     "hero_verdict_good": "运行平稳",
@@ -1809,7 +1822,7 @@
     "tier_backup": "备用 {{index}}",
     "tier_priority": "优先级 {{priority}}",
     "tier_priority_changed": "优先级 {{from}} → {{to}}",
-    "tier_state_active": "正在承接请求",
+    "tier_state_active": "将承接请求",
     "tier_state_standby": "待命，上层全部不可用时启用",
     "tier_state_skipped_model": "不提供该模型，请求会跳过这一层",
     "tier_state_skipped": "没有可用成员，请求会跳过这一层",
@@ -1885,7 +1898,12 @@
     "unsaved_cancel": "留下",
     "duration_seconds": "{{count}} 秒",
     "duration_minutes": "{{count}} 分钟",
-    "duration_hours": "{{count}} 小时"
+    "duration_hours": "{{count}} 小时",
+    "share_hint": "当前策略下此层级内的预期份额，并非实际流量",
+    "state_policy_off": "策略禁用",
+    "state_policy_backup": "策略备用",
+    "policy_note_subscriptions_first": "账户池策略会先尝试所有订阅，再使用任何 API 密钥。层级显示的是配置的优先级；即使处于更高层级，API 密钥也只是备用。",
+    "policy_note_keys_off": "账户池策略不会使用任何提供商的 API 密钥。API 密钥成员仍会显示，但不承接请求。"
   },
   "plugin_management": {
     "title": "插件管理",

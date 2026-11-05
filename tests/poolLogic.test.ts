@@ -204,7 +204,7 @@ describe('summaries', () => {
 
   test('capacity counts only eligible accounts as ready', () => {
     const capacity = summarizeCapacity(accounts);
-    expect(capacity).toEqual({ total: 3, ready: 1, paused: 1, attention: 1 });
+    expect(capacity).toEqual({ total: 3, ready: 1, paused: 1, offByPolicy: 0, attention: 1 });
   });
 
   test('a model-only limit keeps an eligible account in the ready count', () => {

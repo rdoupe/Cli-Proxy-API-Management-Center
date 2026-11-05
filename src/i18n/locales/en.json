@@ -171,7 +171,6 @@
     "policy_name_existing": "Strict priority order",
     "policy_step_subscriptions": "A request goes to the highest-priority subscription login that is not limited.",
     "policy_step_paid_fallback_on": "If no subscription can serve it, a paid API key takes it, whichever provider the key belongs to.",
-    "policy_step_paid_fallback_off": "API keys are not used as backup for any provider; the request fails instead of spending credit.",
     "policy_step_priority": "A request goes to the highest priority that has an account able to serve the model; equal priorities share.",
     "policy_step_limits": "An account that hits a limit or an error is skipped until its timer ends, and the next one takes over.",
     "policy_source_config": "This describes the configured priority tiers; the backend has no separate pool policy.",
@@ -187,7 +186,6 @@
     "requests": "Upstream attempts",
     "successes": "Succeeded",
     "failures": "Failed",
-    "failures_hint": "{{count}} failed",
     "success_rate": "Attempt success rate",
     "failovers": "Failovers",
     "failovers_hint": "Requests that moved to another account",
@@ -229,16 +227,18 @@
       "login_expired": "Login expired",
       "unavailable": "Unavailable",
       "unknown": "Unknown",
-      "paused": "Paused"
+      "paused": "Paused",
+      "off_by_policy": "Off by policy"
     },
     "state_hint": {
       "ready": "Can take requests",
       "rate_limited": "Hit a usage limit; skipped until it resets",
-      "out_of_credits": "No credit left to pay for requests",
+      "out_of_credits": "No credit left; skipped for every model until the automatic recheck",
       "login_expired": "The login no longer works; sign in again",
       "unavailable": "The pool could not use this account",
       "unknown": "The pool has not confirmed this account's state",
-      "paused": "Taken out of rotation by hand"
+      "paused": "Taken out of rotation by hand",
+      "off_by_policy": "An API key the routing policy never uses"
     },
     "reason": {
       "quota": "Usage limit reached",
@@ -293,7 +293,20 @@
     "policy_paid_fallback_hint": "Off means no API key of any provider is used; a request with no eligible subscription fails rather than spending credit.",
     "policy_saved": "Routing policy updated.",
     "policy_save_failed": "The routing policy could not be saved.",
-    "attempts_hint": "Each try on an account counts once; a failover adds one failure and one success."
+    "attempts_hint": "Each try on an account counts once; a failover adds one failure and one success.",
+    "policy_name_existing_no_keys": "Priority order, API keys never used",
+    "policy_name_subscriptions_only": "Subscriptions only, API keys never used",
+    "policy_step_keys_excluded": "API-key accounts are never used, for any provider; a request no subscription can serve fails instead of spending credit.",
+    "policy_load_failed": "The pool policy could not be read.",
+    "filter_off_by_policy": "Off by policy",
+    "overview_off_policy": "{{count}} off by policy.",
+    "stale_title": "The latest refresh failed; showing the last successful check.",
+    "stale_note": "Last successful check {{when}}.",
+    "balance_unknown": "Balance unknown",
+    "recheck_at": "Rechecked automatically {{when}}",
+    "success_rate_hint": "{{count}} attempts failed. A request can still succeed on another account, so this is not the client success rate.",
+    "home_mode_title": "Home mode is on.",
+    "home_mode_note": "The Home dispatcher chooses accounts, not this policy; health and statistics are kept in memory only."
   },
   "dashboard": {
     "hero_verdict_good": "All systems steady",
@@ -1811,7 +1824,7 @@
     "tier_backup": "Fallback {{index}}",
     "tier_priority": "Priority {{priority}}",
     "tier_priority_changed": "Priority {{from}} → {{to}}",
-    "tier_state_active": "Serving requests",
+    "tier_state_active": "Would take requests",
     "tier_state_standby": "Standby, used when every tier above is unavailable",
     "tier_state_skipped_model": "Does not offer this model; requests skip this tier",
     "tier_state_skipped": "No available members; requests skip this tier",
@@ -1887,7 +1900,12 @@
     "unsaved_cancel": "Stay",
     "duration_seconds": "{{count}}s",
     "duration_minutes": "{{count}}m",
-    "duration_hours": "{{count}}h"
+    "duration_hours": "{{count}}h",
+    "share_hint": "Expected share within this tier under the current strategy, not measured traffic",
+    "state_policy_off": "Off by policy",
+    "state_policy_backup": "Backup by policy",
+    "policy_note_subscriptions_first": "The pool policy tries every subscription before any API key. The tiers show configured priorities; an API key is a backup even in a higher tier.",
+    "policy_note_keys_off": "The pool policy never uses API keys, for any provider. API-key members are shown but take no requests."
   },
   "plugin_management": {
     "title": "Plugin Management",

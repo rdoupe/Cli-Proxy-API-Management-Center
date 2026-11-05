@@ -25,7 +25,6 @@ import {
   formatRate,
   formatWindowInstant,
   providerLabel,
-  rateTone,
 } from './format';
 import { usePoolStats } from './hooks/usePoolStats';
 import { successRate } from './logic';
@@ -132,8 +131,7 @@ export function UsagePage() {
             <StatTile
               label={t('pool.success_rate')}
               value={formatRate(rate)}
-              tone={rateTone(rate)}
-              hint={t('pool.failures_hint', { count: stats.totals.failures })}
+              hint={t('pool.success_rate_hint', { count: stats.totals.failures })}
             />
             <StatTile label={t('pool.failovers')} value={formatCount(stats.totals.failovers)} hint={t('pool.failovers_hint')} />
             <StatTile

@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next';
-import type { PoolAccount } from '@/types/pool';
+import type { PoolAccount, PoolAccountDisplayState, PoolPolicy } from '@/types/pool';
 import { STATE_TONES, providerLabel, stateLabel } from '../format';
-import { groupAccountsByProvider } from '../logic';
+import { displayState, groupAccountsByProvider } from '../logic';
 import { ProviderMark } from './ProviderMark';
 import styles from '../pool.module.scss';
 
@@ -12,23 +12,38 @@ const TONE_VARS: Record<string, string> = {
   muted: 'var(--tone-muted)',
 };
 
+const LEGEND_ORDER: readonly PoolAccountDisplayState[] = [
+  'ready',
+  'rate_limited',
+  'out_of_credits',
+  'login_expired',
+  'unavailable',
+  'unknown',
+  'off_by_policy',
+  'paused',
+];
+
 interface CapacityStripProps {
   accounts: readonly PoolAccount[];
+  /** Needed to tell a policy-excluded key from a healthy one; null on older backends. */
+  policy?: PoolPolicy | null;
   onSelect?: (account: PoolAccount) => void;
 }
 
 /**
- * One cell per account, grouped under its provider, coloured by state. The whole pool's
- * readiness in a glance; dashed cells are paused on purpose.
+ * One cell per account, grouped under its provider, coloured by what it is doing: dashed
+ * cells are paused on purpose or excluded by policy, and the legend counts the same states
+ * the group headers and the pages do.
  */
-export function CapacityStrip({ accounts, onSelect }: CapacityStripProps) {
+export function CapacityStrip({ accounts, policy = null, onSelect }: CapacityStripProps) {
   const { t } = useTranslation();
-  const groups = groupAccountsByProvider(accounts);
+  const groups = groupAccountsByProvider(accounts, policy);
   const unknownLabel = t('pool.provider_unknown');
 
-  const legend = (['ready', 'rate_limited', 'out_of_credits', 'login_expired', 'unavailable', 'unknown', 'paused'] as const)
-    .map((state) => ({ state, count: accounts.filter((account) => account.state === state).length }))
-    .filter((entry) => entry.count > 0);
+  const legend = LEGEND_ORDER.map((state) => ({
+    state,
+    count: accounts.filter((account) => displayState(account, policy) === state).length,
+  })).filter((entry) => entry.count > 0);
 
   return (
     <div className={styles.strip}>
@@ -54,14 +69,16 @@ export function CapacityStrip({ accounts, onSelect }: CapacityStripProps) {
               </span>
               <div className={styles.stripCells}>
                 {group.accounts.map((account) => {
-                  const tone = STATE_TONES[account.state];
-                  const title = `${account.label} · ${stateLabel(t, account.state)}`;
+                  const state = displayState(account, policy);
+                  const tone = STATE_TONES[state];
+                  const title = `${account.label} · ${stateLabel(t, state)}`;
                   return (
                     <button
                       key={account.id}
                       type="button"
                       className={styles.stripCell}
                       data-tone={tone}
+                      data-state={state}
                       style={{ '--cell-tone': TONE_VARS[tone] } as React.CSSProperties}
                       title={title}
                       aria-label={title}

@@ -171,7 +171,6 @@
     "policy_name_existing": "Thứ tự ưu tiên nghiêm ngặt",
     "policy_step_subscriptions": "Yêu cầu đi tới đăng nhập thuê bao có ưu tiên cao nhất mà chưa bị giới hạn.",
     "policy_step_paid_fallback_on": "Nếu không thuê bao nào phục vụ được, khóa API trả phí sẽ nhận, bất kể khóa thuộc nhà cung cấp nào.",
-    "policy_step_paid_fallback_off": "Khóa API không được dùng dự phòng cho bất kỳ nhà cung cấp nào; yêu cầu sẽ thất bại thay vì tiêu tín dụng.",
     "policy_step_priority": "Yêu cầu đi tới mức ưu tiên cao nhất có tài khoản phục vụ được mô hình; ưu tiên bằng nhau thì chia sẻ.",
     "policy_step_limits": "Tài khoản chạm giới hạn hoặc lỗi bị bỏ qua đến khi hết giờ, tài khoản kế tiếp thay thế.",
     "policy_source_config": "Đây là các bậc ưu tiên đã cấu hình; backend không có chính sách nhóm riêng.",
@@ -187,7 +186,6 @@
     "requests": "Lượt thử upstream",
     "successes": "Thành công",
     "failures": "Thất bại",
-    "failures_hint": "{{count}} thất bại",
     "success_rate": "Tỷ lệ lượt thử thành công",
     "failovers": "Chuyển dự phòng",
     "failovers_hint": "Yêu cầu đã chuyển sang tài khoản khác",
@@ -229,16 +227,18 @@
       "login_expired": "Đăng nhập hết hạn",
       "unavailable": "Không khả dụng",
       "unknown": "Không rõ",
-      "paused": "Tạm dừng"
+      "paused": "Tạm dừng",
+      "off_by_policy": "Tắt theo chính sách"
     },
     "state_hint": {
       "ready": "Có thể nhận yêu cầu",
       "rate_limited": "Chạm giới hạn sử dụng; bỏ qua đến khi đặt lại",
-      "out_of_credits": "Không còn tín dụng để trả cho yêu cầu",
+      "out_of_credits": "Hết tín dụng; bị bỏ qua với mọi mô hình cho đến lần kiểm tra lại tự động",
       "login_expired": "Đăng nhập không còn hoạt động; hãy đăng nhập lại",
       "unavailable": "Nhóm không dùng được tài khoản này",
       "unknown": "Nhóm chưa xác nhận trạng thái tài khoản này",
-      "paused": "Được đưa ra khỏi luân phiên thủ công"
+      "paused": "Được đưa ra khỏi luân phiên thủ công",
+      "off_by_policy": "Khóa API mà chính sách định tuyến không bao giờ dùng"
     },
     "reason": {
       "quota": "Đã chạm giới hạn sử dụng",
@@ -293,7 +293,20 @@
     "policy_paid_fallback_hint": "Tắt nghĩa là không dùng khóa API của bất kỳ nhà cung cấp nào; yêu cầu không có thuê bao đủ điều kiện sẽ thất bại thay vì tiêu tín dụng.",
     "policy_saved": "Đã cập nhật chính sách định tuyến.",
     "policy_save_failed": "Không lưu được chính sách định tuyến.",
-    "attempts_hint": "Mỗi lượt thử trên một tài khoản tính một lần; một lần chuyển dự phòng thêm một thất bại và một thành công."
+    "attempts_hint": "Mỗi lượt thử trên một tài khoản tính một lần; một lần chuyển dự phòng thêm một thất bại và một thành công.",
+    "policy_name_existing_no_keys": "Theo thứ tự ưu tiên, không bao giờ dùng khóa API",
+    "policy_name_subscriptions_only": "Chỉ gói đăng ký, không bao giờ dùng khóa API",
+    "policy_step_keys_excluded": "Tài khoản khóa API không bao giờ được dùng, với mọi nhà cung cấp; yêu cầu mà không gói đăng ký nào phục vụ được sẽ thất bại thay vì tiêu tín dụng.",
+    "policy_load_failed": "Không đọc được chính sách của pool.",
+    "filter_off_by_policy": "Tắt theo chính sách",
+    "overview_off_policy": "{{count}} tắt theo chính sách.",
+    "stale_title": "Lần làm mới gần nhất thất bại; đang hiển thị lần kiểm tra thành công cuối.",
+    "stale_note": "Lần kiểm tra thành công cuối {{when}}.",
+    "balance_unknown": "Số dư không rõ",
+    "recheck_at": "Tự động kiểm tra lại {{when}}",
+    "success_rate_hint": "{{count}} lần thử thất bại. Yêu cầu vẫn có thể thành công trên tài khoản khác, nên đây không phải tỷ lệ thành công của client.",
+    "home_mode_title": "Chế độ Home đang bật.",
+    "home_mode_note": "Bộ điều phối Home chọn tài khoản, không phải chính sách này; tình trạng và thống kê chỉ lưu trong bộ nhớ."
   },
   "dashboard": {
     "hero_verdict_good": "Mọi hệ thống ổn định",
@@ -1767,7 +1780,7 @@
     "tier_backup": "Dự phòng {{index}}",
     "tier_priority": "Độ ưu tiên {{priority}}",
     "tier_priority_changed": "Độ ưu tiên {{from}} → {{to}}",
-    "tier_state_active": "Đang phục vụ yêu cầu",
+    "tier_state_active": "Sẽ nhận yêu cầu",
     "tier_state_standby": "Chờ, dùng khi mọi tầng phía trên không khả dụng",
     "tier_state_skipped_model": "Không cung cấp mô hình này; yêu cầu bỏ qua tầng này",
     "tier_state_skipped": "Không có thành viên khả dụng; yêu cầu bỏ qua tầng này",
@@ -1843,7 +1856,12 @@
     "unsaved_cancel": "Ở lại",
     "duration_seconds": "{{count}} giây",
     "duration_minutes": "{{count}} phút",
-    "duration_hours": "{{count}} giờ"
+    "duration_hours": "{{count}} giờ",
+    "share_hint": "Tỷ lệ dự kiến trong bậc này theo chiến lược hiện tại, không phải lưu lượng đo được",
+    "state_policy_off": "Tắt theo chính sách",
+    "state_policy_backup": "Dự phòng theo chính sách",
+    "policy_note_subscriptions_first": "Chính sách pool thử mọi gói đăng ký trước bất kỳ khóa API nào. Các bậc hiển thị ưu tiên đã cấu hình; khóa API chỉ là dự phòng dù ở bậc cao hơn.",
+    "policy_note_keys_off": "Chính sách pool không bao giờ dùng khóa API, với mọi nhà cung cấp. Thành viên khóa API vẫn hiển thị nhưng không nhận yêu cầu."
   },
   "plugin_management": {
     "title": "Quản lý Plugin",

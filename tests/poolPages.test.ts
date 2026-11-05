@@ -12,8 +12,15 @@ import { LatencyChart } from '../src/features/pool/components/LatencyChart';
 import { PolicyCard } from '../src/features/pool/components/PolicyCard';
 import { RangePicker } from '../src/features/pool/components/RangePicker';
 import { RequestsChart } from '../src/features/pool/components/RequestsChart';
-import { formatBalance, formatLatency, rateTone, reasonLabel } from '../src/features/pool/format';
-import { filterAccounts } from '../src/features/pool/logic';
+import {
+  formatBalance,
+  formatLatency,
+  formatPastInstant,
+  reasonLabel,
+  resetLabelKey,
+} from '../src/features/pool/format';
+import { filterAccounts, summarizeCapacity, attentionReasons } from '../src/features/pool/logic';
+import type { PoolPolicy } from '../src/types/pool';
 import type { PoolAccount, PoolSeriesPoint } from '../src/types/pool';
 
 const account = (overrides: Partial<PoolAccount>): PoolAccount => ({
@@ -23,6 +30,7 @@ const account = (overrides: Partial<PoolAccount>): PoolAccount => ({
   kind: 'subscription',
   state: 'ready',
   reason: '',
+  healthReason: '',
   eligible: true,
   priority: 10,
   resetAt: null,
@@ -67,6 +75,17 @@ describe('account actions', () => {
     expect(expired).toContain('Login expired');
     expect(expired).toContain('Login was revoked or expired');
     expect(expired).toContain('href="/oauth"');
+    // A temporary outage is not fixed by signing in again.
+    const outage = render(
+      createElement(AccountRow, {
+        account: account({ state: 'unavailable', reason: 'transient_error' }),
+        nowMs: Date.now(),
+        busy: false,
+        disabled: false,
+        onAction: () => undefined,
+      })
+    );
+    expect(outage).not.toContain('href="/oauth"');
 
     const key = render(
       createElement(AccountRow, {
@@ -112,6 +131,112 @@ describe('account actions', () => {
     );
     expect(bare).not.toContain('Balance');
     expect(bare).not.toContain('Back ');
+
+    // An API key with no reported balance says so rather than hiding the field.
+    const unknownBalance = render(
+      createElement(AccountRow, {
+        account: account({ kind: 'api_key', balance: null }),
+        nowMs: now,
+        busy: false,
+        disabled: false,
+        onAction: () => undefined,
+      })
+    );
+    expect(unknownBalance).toContain('Balance unknown');
+  });
+
+  test('an out-of-credits reset is a recheck, never a promise the account is back', async () => {
+    await i18n.changeLanguage('en');
+    expect(resetLabelKey('rate_limited')).toBe('pool.back_at');
+    expect(resetLabelKey('out_of_credits')).toBe('pool.recheck_at');
+    expect(resetLabelKey('unavailable')).toBe('pool.retry_at');
+    const now = Date.parse('2026-11-04T10:00:00Z');
+    const html = render(
+      createElement(AccountRow, {
+        account: account({ kind: 'api_key', state: 'out_of_credits', eligible: false, resetAt: '2026-11-04T11:00:00Z' }),
+        nowMs: now,
+        busy: false,
+        disabled: false,
+        onAction: () => undefined,
+      })
+    );
+    expect(html).toContain('Rechecked automatically in 1 hour');
+    expect(html).not.toContain('Back in');
+  });
+
+  test('a last-success time never reads as the future when the minute clock lags', async () => {
+    await i18n.changeLanguage('en');
+    const real = Date.parse('2026-11-04T10:00:50Z');
+    const clock = Date.parse('2026-11-04T10:00:00Z');
+    const justNow = Date.parse('2026-11-04T10:00:40Z');
+    expect(formatPastInstant(justNow, clock, 'en', real)).toBe('1 minute ago');
+    expect(formatPastInstant(real - 3 * 3_600_000, clock, 'en', real)).toBe('3 hours ago');
+    const html = render(
+      createElement(AccountRow, {
+        account: account({ lastSuccessAt: new Date(Date.now() + 30_000).toISOString() }),
+        nowMs: Date.now() - 50_000,
+        busy: false,
+        disabled: false,
+        onAction: () => undefined,
+      })
+    );
+    expect(html).toContain('ago');
+    expect(html).not.toContain('Last success in');
+  });
+
+  test('a policy-excluded key says so and keeps its health, apart from attention', async () => {
+    await i18n.changeLanguage('en');
+    const policy: PoolPolicy = { strategy: 'existing', allowPaidFallback: false };
+    const healthy = account({
+      id: 'k1',
+      kind: 'api_key',
+      state: 'ready',
+      eligible: false,
+      reason: 'Not used: paid fallback is disabled by policy',
+      healthReason: 'Ready',
+    });
+    const broke = account({
+      id: 'k2',
+      kind: 'api_key',
+      state: 'out_of_credits',
+      eligible: false,
+      reason: 'Not used: paid fallback is disabled by policy; no credit left',
+      healthReason: 'Provider reported no credit left',
+    });
+    const sub = account({ id: 's1' });
+    expect(summarizeCapacity([healthy, broke, sub], policy)).toEqual({
+      total: 3,
+      ready: 1,
+      paused: 0,
+      offByPolicy: 2,
+      attention: 0,
+    });
+    expect(attentionReasons([healthy, broke, sub], policy)).toEqual([]);
+    expect(filterAccounts([healthy, broke, sub], 'attention', '', policy)).toEqual([]);
+    expect(filterAccounts([healthy, broke, sub], 'off_by_policy', '', policy).map((a) => a.id)).toEqual(['k1', 'k2']);
+    // Without a policy (older backend, or fallback allowed) the same accounts are plain health.
+    expect(summarizeCapacity([healthy, broke, sub], null).attention).toBe(2);
+
+    const row = render(
+      createElement(AccountRow, {
+        account: broke,
+        policy,
+        nowMs: Date.now(),
+        busy: false,
+        disabled: false,
+        onAction: () => undefined,
+      })
+    );
+    expect(row).toContain('data-state="off_by_policy"');
+    expect(row).toContain('>Off by policy<');
+    expect(row).toContain('Out of credits · Provider reported no credit left');
+    expect(row).not.toContain('paid fallback is disabled');
+
+    const strip = render(createElement(CapacityStrip, { accounts: [healthy, broke, sub], policy }));
+    expect(strip).toContain('1 of 3 ready');
+    expect(strip).toContain('Off by policy<b>2</b>');
+    expect(strip).toContain('Ready<b>1</b>');
+    expect(strip).not.toContain('Out of credits<b>');
   });
 });
 
@@ -155,7 +280,29 @@ describe('policy card', () => {
     const off = render(
       createElement(PolicyCard, { policy: { strategy: 'subscriptions_first', allowPaidFallback: false } })
     );
-    expect(off).toContain('not used as backup for any provider');
+    expect(off).toContain('Subscriptions only, API keys never used');
+    expect(off).not.toContain('paid keys as backup');
+    expect(off).toContain('API-key accounts are never used, for any provider');
+  });
+
+  test('priority order with paid fallback off says keys are excluded everywhere', async () => {
+    await i18n.changeLanguage('en');
+    const html = render(
+      createElement(PolicyCard, { policy: { strategy: 'existing', allowPaidFallback: false } })
+    );
+    expect(html).toContain('Priority order, API keys never used');
+    expect(html).toContain('API-key accounts are never used, for any provider');
+    const on = render(createElement(PolicyCard, { policy: { strategy: 'existing', allowPaidFallback: true } }));
+    expect(on).toContain('Strict priority order');
+    expect(on).not.toContain('never used');
+  });
+
+  test('a failed policy read is not described as an older backend', async () => {
+    await i18n.changeLanguage('en');
+    const html = render(createElement(PolicyCard, { policy: null, missing: 'error' }));
+    expect(html).toContain('The pool policy could not be read.');
+    expect(html).not.toContain('no separate pool policy');
+    expect(html).toContain('data-policy-missing="error"');
   });
 
   test('without a pool policy it describes configured priorities and says where that comes from', async () => {
@@ -235,10 +382,15 @@ describe('format', () => {
     expect(formatLatency(null, 'n/a')).toBe('n/a');
     expect(formatLatency(850)).toBe('850 ms');
     expect(formatLatency(2500)).toBe('2.50 s');
-    expect(rateTone(null)).toBe('muted');
-    expect(rateTone(99)).toBe('good');
-    expect(rateTone(95)).toBe('warning');
-    expect(rateTone(50)).toBe('critical');
+  });
+
+  test('the attempt success rate is shown without a verdict colour', () => {
+    const overview = readFileSync('src/features/pool/OverviewPage.tsx', 'utf8');
+    const usage = readFileSync('src/features/pool/UsagePage.tsx', 'utf8');
+    for (const source of [overview, usage]) {
+      expect(source).not.toContain('rateTone');
+      expect(source).toContain("'pool.success_rate_hint'");
+    }
   });
 
   test('reason codes translate, free text passes through', async () => {
@@ -264,6 +416,13 @@ describe('navigation and routes', () => {
     }
   });
 
+  test('the credential-file count sits on the credential-files entry, not on Accounts', () => {
+    const accountsItem = layout.slice(layout.indexOf("path: '/accounts'"), layout.indexOf("path: '/usage'"));
+    expect(accountsItem).not.toContain('badge');
+    const filesItem = layout.slice(layout.indexOf("path: '/auth-files'"), layout.indexOf('quickStartNavItem,'));
+    expect(filesItem).toContain('badge: authFilesCount');
+  });
+
   test('old entry points still resolve', () => {
     expect(routes).toContain(`{ path: '/dashboard', element: <Navigate to="/" replace /> }`);
     expect(routes).toContain(`{ path: '/accounts', element: <AccountsPage /> }`);
@@ -276,7 +435,31 @@ describe('navigation and routes', () => {
   test('every locale labels the new navigation', async () => {
     for (const lang of ['en', 'zh-CN', 'zh-TW', 'ru', 'vi', 'ko', 'tr']) {
       await i18n.changeLanguage(lang);
-      for (const key of ['nav.overview', 'nav.accounts', 'nav.usage', 'nav_groups.pool', 'pool.state.ready']) {
+      for (const key of [
+        'nav.overview',
+        'nav.accounts',
+        'nav.usage',
+        'nav_groups.pool',
+        'pool.state.ready',
+        'pool.state.off_by_policy',
+        'pool.state_hint.off_by_policy',
+        'pool.filter_off_by_policy',
+        'pool.policy_name_existing_no_keys',
+        'pool.policy_name_subscriptions_only',
+        'pool.policy_step_keys_excluded',
+        'pool.policy_load_failed',
+        'pool.balance_unknown',
+        'pool.recheck_at',
+        'pool.stale_title',
+        'pool.stale_note',
+        'pool.success_rate_hint',
+        'pool.home_mode_title',
+        'routing.state_policy_off',
+        'routing.state_policy_backup',
+        'routing.policy_note_subscriptions_first',
+        'routing.policy_note_keys_off',
+        'routing.share_hint',
+      ]) {
         expect(i18n.t(key)).not.toBe(key);
       }
     }

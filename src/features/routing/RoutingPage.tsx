@@ -51,6 +51,7 @@ import { RoutingSaveBar } from './components/RoutingSaveBar';
 import { usePageTransitionLayer } from '@/components/common/PageTransitionLayer';
 import { TierLadder } from './components/TierLadder';
 import { RoutingPoolSection } from '@/features/pool/components/RoutingPoolSection';
+import { usePoolPolicy } from '@/features/pool/hooks/usePoolPolicy';
 import { WeightDialog } from './components/WeightDialog';
 import styles from './RoutingPage.module.scss';
 
@@ -97,6 +98,7 @@ export function RoutingPage() {
   const catalogRef = useRef<RoutingModelCatalog>(EMPTY_CATALOG);
 
   const connected = connectionStatus === 'connected';
+  const { status: policyStatus, policy, setPolicy } = usePoolPolicy();
 
   const loadModels = useCallback((next: RoutingBoard, requestId: number) => {
     const isCurrent = () => requestId === requestRef.current;
@@ -206,8 +208,9 @@ export function RoutingPage() {
   );
   const selectedModel = model.trim() || null;
   const preview = useMemo(
-    () => (board && draft ? resolveRoute(board, draft, catalog, selectedModel, nowMs) : null),
-    [board, draft, catalog, selectedModel, nowMs]
+    () =>
+      board && draft ? resolveRoute(board, draft, catalog, selectedModel, nowMs, policy) : null,
+    [board, draft, catalog, selectedModel, nowMs, policy]
   );
   const modelOptions = useMemo(
     () => (board ? collectModelOptions(board, catalog) : []),
@@ -358,6 +361,11 @@ export function RoutingPage() {
     return (
       <div className={styles.layout} ref={layoutRef}>
         <section className={styles.board} aria-label={t('routing.title')}>
+          {policyNotes.length > 0 ? (
+            <p className={styles.policyNote} role="note">
+              {policyNotes.join(' ')}
+            </p>
+          ) : null}
           <TierLadder
             members={members}
             draft={draft}
@@ -379,6 +387,11 @@ export function RoutingPage() {
   };
 
   const editingMember = weightEdit ? (members.get(weightEdit.key) ?? null) : null;
+  // The board is drawn from configured priorities; say where the pool policy overrides them.
+  const policyNotes = [
+    policy?.strategy === 'subscriptions_first' ? t('routing.policy_note_subscriptions_first') : '',
+    policy && !policy.allowPaidFallback ? t('routing.policy_note_keys_off') : '',
+  ].filter(Boolean);
 
   return (
     <div className={styles.page} ref={revealRef}>
@@ -388,7 +401,12 @@ export function RoutingPage() {
         </h1>
       </header>
 
-      <RoutingPoolSection settings={draft?.settings ?? null} />
+      <RoutingPoolSection
+        settings={draft?.settings ?? null}
+        status={policyStatus}
+        policy={policy}
+        onPolicySaved={setPolicy}
+      />
 
       {renderBody()}
 

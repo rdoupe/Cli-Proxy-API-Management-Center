@@ -4,13 +4,14 @@
  */
 
 import type { TFunction } from 'i18next';
-import type { PoolAccountState, PoolBalance } from '@/types/pool';
+import type { PoolAccountDisplayState, PoolAccountState, PoolBalance } from '@/types/pool';
+import { relativeTimeParts } from '@/utils/quota/relativeTime';
 import { formatCompactNumber, formatPercent } from '@/utils/format';
 import { providerLabel as dashboardProviderLabel } from '@/features/dashboard/utils';
 
 export type StateTone = 'good' | 'warning' | 'critical' | 'muted';
 
-export const STATE_TONES: Record<PoolAccountState, StateTone> = {
+export const STATE_TONES: Record<PoolAccountDisplayState, StateTone> = {
   ready: 'good',
   rate_limited: 'warning',
   out_of_credits: 'critical',
@@ -18,9 +19,10 @@ export const STATE_TONES: Record<PoolAccountState, StateTone> = {
   unavailable: 'critical',
   unknown: 'warning',
   paused: 'muted',
+  off_by_policy: 'muted',
 };
 
-export const stateLabel = (t: TFunction, state: PoolAccountState): string =>
+export const stateLabel = (t: TFunction, state: PoolAccountDisplayState): string =>
   t(`pool.state.${state}`);
 
 /** Backend reasons are machine codes sometimes; translate the known ones, show the rest as-is. */
@@ -66,14 +68,6 @@ export const formatLatency = (ms: number | null, dash = '—'): string => {
   return `${(ms / 1000).toFixed(ms < 10_000 ? 2 : 1)} s`;
 };
 
-/** Tone for a success rate: pool traffic is mostly fine, so warn early. */
-export const rateTone = (rate: number | null): StateTone => {
-  if (rate === null) return 'muted';
-  if (rate >= 98) return 'good';
-  if (rate >= 90) return 'warning';
-  return 'critical';
-};
-
 /** Window bounds without seconds: "Nov 3, 10:00". */
 export const formatWindowInstant = (iso: string | null, locale?: string): string => {
   if (!iso) return '—';
@@ -87,6 +81,46 @@ export const formatWindowInstant = (iso: string | null, locale?: string): string
   });
 };
 
-/** "Back in 3 hours" only when the limit itself ends; otherwise the pool merely retries. */
-export const resetLabelKey = (state: PoolAccountState): string =>
-  state === 'rate_limited' || state === 'out_of_credits' ? 'pool.back_at' : 'pool.retry_at';
+/**
+ * "Back in 3 hours" only when the limit itself ends. An out-of-credits `resetAt` is the time of
+ * the automatic recheck, which may fail again, so it is never promised as "back"; anything else
+ * is merely a retry.
+ */
+export const resetLabelKey = (state: PoolAccountState): string => {
+  if (state === 'rate_limited') return 'pool.back_at';
+  if (state === 'out_of_credits') return 'pool.recheck_at';
+  return 'pool.retry_at';
+};
+
+/**
+ * Relative phrase for an instant that is known to be in the past (a check, a last success).
+ *
+ * `nowMs` ticks once a minute, so an event from twenty seconds ago can sit ahead of it and read
+ * "in 1 minute". The baseline is therefore the later of the shared clock and the real clock,
+ * and the instant is clamped under it, so the phrase is always "… ago".
+ */
+export const formatPastInstant = (
+  targetMs: number,
+  nowMs: number,
+  locale?: string,
+  realNowMs: number = Date.now()
+): string => {
+  const baseline = Math.max(nowMs, realNowMs);
+  const { value, unit } = relativeTimeParts(Math.min(targetMs, baseline - 1), baseline);
+  return relativeFormatter(locale).format(value, unit);
+};
+
+const relativeFormatters = new Map<string, Intl.RelativeTimeFormat>();
+const relativeFormatter = (locale?: string): Intl.RelativeTimeFormat => {
+  const key = locale ?? '';
+  let formatter = relativeFormatters.get(key);
+  if (!formatter) {
+    try {
+      formatter = new Intl.RelativeTimeFormat(locale, { numeric: 'always' });
+    } catch {
+      formatter = new Intl.RelativeTimeFormat(undefined, { numeric: 'always' });
+    }
+    relativeFormatters.set(key, formatter);
+  }
+  return formatter;
+};

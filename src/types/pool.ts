@@ -17,6 +17,13 @@ export type PoolAccountState =
   | 'unavailable'
   | 'unknown';
 
+/**
+ * What a row, pill or legend entry says. `off_by_policy` is not a health state: it is an
+ * API-key account the routing policy forbids (`allowPaidFallback: false`), derived from the
+ * structured policy and kind, never from the backend's reason text.
+ */
+export type PoolAccountDisplayState = PoolAccountState | 'off_by_policy';
+
 export const POOL_ACCOUNT_STATES: readonly PoolAccountState[] = [
   'ready',
   'rate_limited',
@@ -40,6 +47,8 @@ export interface PoolAccount {
   state: PoolAccountState;
   /** Backend-supplied explanation of the state; empty when it gave none. */
   reason: string;
+  /** The health sentence alone, without any policy note; empty on backends that omit it. */
+  healthReason: string;
   eligible: boolean;
   priority: number | null;
   resetAt: string | null;
@@ -88,6 +97,8 @@ export interface PoolOverview {
   policy: PoolPolicy | null;
   stats: PoolStatsSummary;
   persistence: PoolPersistence;
+  /** True when the Home dispatcher, not this policy, chooses accounts. */
+  homeMode: boolean;
   /** Where the data came from; the UI says so instead of pretending. */
   source: 'pool' | 'credentials';
 }
@@ -145,6 +156,8 @@ export interface PoolExplain {
   tiedAccountIds: string[];
   candidates: PoolExplainCandidate[];
   reason: string;
+  /** Backend caveat about what the explanation cannot see (per-request filters, rotation). */
+  note: string;
 }
 
 /** Why a `/pool/*` call produced no data. */

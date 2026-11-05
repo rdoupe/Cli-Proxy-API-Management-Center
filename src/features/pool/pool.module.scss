@@ -1127,7 +1127,8 @@
 
 .candidate {
   display: grid;
-  grid-template-columns: 10px minmax(0, 1fr) auto;
+  // A long reason must not squeeze the label to nothing.
+  grid-template-columns: 10px minmax(9em, 2fr) minmax(0, 3fr);
   gap: 10px;
   align-items: center;
   padding: 8px 0;
@@ -1151,6 +1152,8 @@
 .candidateReason {
   font-size: 12.5px;
   color: var(--text-secondary);
+  text-align: right;
+  text-wrap: pretty;
 }
 
 .srOnly {

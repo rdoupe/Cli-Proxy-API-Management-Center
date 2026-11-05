@@ -141,6 +141,7 @@ function keyMembers(raw: unknown, family: RoutingKeyFamily): RoutingMember[] {
       members.push({
         key: `key:${family}:${groupIndex}:${keyIndex}`,
         kind: 'apiKey',
+        accountKind: 'api_key',
         family,
         name: groupName || host || family,
         detail: [host && host !== groupName ? host : '', masked].filter(Boolean).join(' · '),
@@ -174,6 +175,7 @@ function compatMembers(raw: unknown): RoutingMember[] {
     members.push({
       key: `compat:${groupIndex}`,
       kind: 'compat',
+      accountKind: 'api_key',
       family: ROUTING_COMPAT_FAMILY,
       name: name || `#${groupIndex + 1}`,
       detail: readHost(group['base-url']),
@@ -204,6 +206,11 @@ const isTruthyFlag = (value: unknown): boolean =>
 const stripJsonExtension = (name: string): string =>
   name.length > 5 && name.toLowerCase().endsWith('.json') ? name.slice(0, -5) : name;
 
+/** The registry's account type, read only as a flag; the field itself is never displayed. */
+const isApiKeyCredential = (file: AuthFileItem): boolean =>
+  readText(String((file as Record<string, unknown>).account_type ?? '')).toLowerCase() ===
+  'api_key';
+
 function credentialMember(file: AuthFileItem): RoutingMember | null {
   const name = readText(file.name);
   if (!name) return null;
@@ -214,6 +221,7 @@ function credentialMember(file: AuthFileItem): RoutingMember | null {
   return {
     key: `cred:${name}`,
     kind: 'credential',
+    accountKind: isApiKeyCredential(file) ? 'api_key' : 'subscription',
     family: readText(file.type) || readText(file.provider) || 'unknown',
     name: primary,
     detail: primary.toLowerCase() === base.toLowerCase() ? '' : base,

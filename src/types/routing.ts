@@ -66,9 +66,14 @@ export interface RoutingWeightSlot {
   label: string;
 }
 
+/** What the pool policy sees: a login-based subscription or a paid API key. */
+export type RoutingAccountKind = 'subscription' | 'api_key';
+
 export interface RoutingMember {
   key: string;
   kind: RoutingMemberKind;
+  /** Config API keys and OpenAI-compatible providers are API keys; credential files may be either. */
+  accountKind: RoutingAccountKind;
   /** Brand or credential type, for icons and labels. */
   family: string;
   name: string;
@@ -144,7 +149,17 @@ export interface RoutingPlan {
 }
 
 export type RouteMemberState =
-  'serving' | 'excluded' | 'cooling' | 'blocked' | 'unknown' | 'ineligible' | 'disabled';
+  | 'serving'
+  | 'excluded'
+  | 'cooling'
+  | 'blocked'
+  | 'unknown'
+  | 'ineligible'
+  | 'disabled'
+  /** The pool policy never uses API keys, so this one takes nothing. */
+  | 'policy_off'
+  /** Subscriptions first: an able API key waits until no subscription can serve. */
+  | 'policy_backup';
 
 export type RouteTierState = 'active' | 'standby' | 'skipped' | 'cooling' | 'unknown';
 

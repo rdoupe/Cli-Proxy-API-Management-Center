@@ -142,6 +142,8 @@ export function MemberCard({
   } else if (state === 'blocked') chip = t('routing.state_blocked');
   else if (state === 'unknown') chip = t('routing.state_unknown');
   else if (state === 'excluded') chip = t('routing.state_excluded');
+  else if (state === 'policy_off') chip = t('routing.state_policy_off');
+  else if (state === 'policy_backup') chip = t('routing.state_policy_backup');
 
   const singleWeight = member.weights.length === 1 ? weights[0] : null;
   const showWeight =
@@ -149,7 +151,7 @@ export function MemberCard({
     singleWeight !== null &&
     singleWeight !== undefined &&
     state !== 'excluded';
-  const muted = state === 'disabled' || state === 'ineligible';
+  const muted = state === 'disabled' || state === 'ineligible' || state === 'policy_off';
 
   const className = [
     styles.card,
@@ -219,7 +221,9 @@ export function MemberCard({
       </span>
 
       {route?.share !== null && route?.share !== undefined ? (
-        <span className={styles.share}>{t('routing.share', { share: route.share })}</span>
+        <span className={styles.share} title={t('routing.share_hint')}>
+          {t('routing.share', { share: route.share })}
+        </span>
       ) : null}
       {chip ? <span className={styles.chip}>{chip}</span> : null}
 

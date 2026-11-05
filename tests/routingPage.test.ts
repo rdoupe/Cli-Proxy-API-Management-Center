@@ -87,7 +87,7 @@ describe('routing board rendering', () => {
     expect(html).toContain('请求进入');
     expect(html).toContain('首选');
     expect(html).toContain('备用 1');
-    expect(html).toContain('正在承接请求');
+    expect(html).toContain('将承接请求');
     expect(html).toContain('整层不可用时转入下一层');
     expect(html).toContain('main@example.com');
     expect(html).toContain('aria-haspopup="menu"');
@@ -138,7 +138,9 @@ describe('routing board rendering', () => {
     // Credentials report real runtime state and never carry the note.
     expect(cardMarkup(html, 'cred:main.json')).not.toContain('无冷却信息');
     const card = readFileSync('src/features/routing/components/MemberCard.tsx', 'utf8');
-    expect(card).toContain("const muted = state === 'disabled' || state === 'ineligible';");
+    expect(card).toContain(
+      "const muted = state === 'disabled' || state === 'ineligible' || state === 'policy_off';"
+    );
   });
 
   test('the strategy picker is a keyboard radio group', async () => {
